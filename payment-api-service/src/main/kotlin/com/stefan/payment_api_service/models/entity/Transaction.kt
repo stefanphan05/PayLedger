@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.Version
 import org.hibernate.annotations.CreationTimestamp
 import java.math.BigDecimal
 import java.time.Instant
@@ -31,5 +32,9 @@ class Transaction (
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    val createdAt: Instant? = null
+    val createdAt: Instant? = null,
+
+    @Version
+    @Column(name = "version", nullable = false)
+    var version: Long = 0
 )

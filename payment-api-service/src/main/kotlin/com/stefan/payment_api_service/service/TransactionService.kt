@@ -6,6 +6,7 @@ import com.stefan.payment_api_service.models.enum.TransactionStatus
 import com.stefan.payment_api_service.models.exception.TransactionNotFoundException
 import com.stefan.payment_api_service.repository.TransactionRepository
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
@@ -24,6 +25,13 @@ class TransactionService(
             transactionStatus = TransactionStatus.PENDING,
         )
 
+        return repository.save(transaction)
+    }
+
+    @Transactional
+    fun updateTransactionStatus(id: UUID, transactionStatus: TransactionStatus): Transaction {
+        val transaction = getTransactionById(id)
+        transaction.transactionStatus = transactionStatus
         return repository.save(transaction)
     }
 }
