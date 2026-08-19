@@ -15,7 +15,7 @@ import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
-import org.mockito.kotlin.times
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.math.BigDecimal
@@ -69,7 +69,30 @@ class TransactionServiceTests {
         assertEquals(transactionRequestDTO.amount, result.amount)
         assertEquals(transactionRequestDTO.currencyCode, result.currency)
         assertNotNull(result.id)
-        verify(transactionRepository, times(1)).save(any())
+        verify(transactionRepository).save(any())
+    }
+
+    @Test
+    fun `updateTransactionStatus updates transaction status successfully`() {
+        val transaction = mockTransaction()
+        whenever(transactionRepository.findById(transaction.id)).thenReturn(Optional.of(transaction))
+        whenever(transactionRepository.save(any())).thenAnswer { it.arguments[0] }
+
+        val updatedResult = transactionService.updateTransactionStatus(transaction.id, TransactionStatus.FAILED)
+
+        assertEquals(TransactionStatus.FAILED, updatedResult.transactionStatus)
+        verify(transactionRepository).save(transaction)
+        verify(transactionRepository).findById(transaction.id)
+    }
+
+    @Test
+    fun `updateTransactionStatus throws an exception if the transaction does not exist`() {
+        val id = UUID.randomUUID()
+        whenever(transactionRepository.findById(id)).thenReturn(Optional.empty())
+
+        assertThrows<TransactionNotFoundException> { transactionService.updateTransactionStatus(id, TransactionStatus.FAILED) }
+        verify(transactionRepository).findById(id)
+        verify(transactionRepository, never()).save(any())
     }
 
     private fun mockTransaction(
