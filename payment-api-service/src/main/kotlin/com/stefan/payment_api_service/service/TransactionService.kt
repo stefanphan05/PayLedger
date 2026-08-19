@@ -24,7 +24,6 @@ class TransactionService(
             transactionStatus = TransactionStatus.PENDING,
         )
 
-        repository.save(transaction)
-        return transaction
+        return repository.save(transaction)
     }
 }
