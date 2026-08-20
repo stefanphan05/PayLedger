@@ -3,7 +3,7 @@ package com.stefan.payment_api_service.service
 import com.stefan.payment_api_service.models.dto.TransactionRequestDTO
 import com.stefan.payment_api_service.models.entity.Transaction
 import com.stefan.payment_api_service.models.enum.TransactionStatus
-import com.stefan.payment_api_service.models.exception.TransactionNotFoundException
+import com.stefan.payment_api_service.exception.TransactionNotFoundException
 import com.stefan.payment_api_service.repository.TransactionRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

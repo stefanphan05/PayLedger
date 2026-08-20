@@ -1,8 +1,6 @@
 package com.stefan.payment_api_service.controller
 
 import com.stefan.payment_api_service.models.dto.TransactionRequestDTO
-import com.stefan.payment_api_service.models.entity.Transaction
-import com.stefan.payment_api_service.models.exception.TransactionNotFoundException
 import com.stefan.payment_api_service.service.TransactionService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -22,20 +20,12 @@ class TransactionController(
 ) {
     @GetMapping("/{transactionId}")
     fun transaction(@PathVariable transactionId: UUID): ResponseEntity<Any> {
-        return try {
-            ResponseEntity.ok(transactionService.getTransactionById(transactionId))
-        } catch (ex: TransactionNotFoundException) {
-            ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.message)
-        }
+        return ResponseEntity.ok(transactionService.getTransactionById(transactionId))
     }
 
     @PostMapping
     fun createTransaction(@RequestBody @Valid transactionRequestDTO: TransactionRequestDTO): ResponseEntity<Any> {
-        return try {
-            val created = transactionService.createTransaction(transactionRequestDTO)
-            ResponseEntity.status(HttpStatus.CREATED).body(created)
-        } catch (ex: Exception) {
-            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.message)
-        }
+        val created = transactionService.createTransaction(transactionRequestDTO)
+        return ResponseEntity.status(HttpStatus.CREATED).body(created)
     }
 }
