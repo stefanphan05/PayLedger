@@ -1,5 +1,6 @@
 package com.stefan.payment_api_service.models.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
@@ -25,6 +26,7 @@ class User (
     @Column(name = "email", nullable = false, unique = true)
     var email: String,
 
+    @field:JsonIgnore
     @Column(name = "password", nullable = false)
     var password: String,
 
