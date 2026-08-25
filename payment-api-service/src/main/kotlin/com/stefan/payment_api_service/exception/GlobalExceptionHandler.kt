@@ -17,6 +17,13 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
         return problem
     }
 
+    @ExceptionHandler(EmailAlreadyInUseException::class)
+    fun handleEmailAlreadyInUseException(e: EmailAlreadyInUseException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.message)
+        problem.title = "Email Already In Use"
+        return problem
+    }
+
     @ExceptionHandler(ObjectOptimisticLockingFailureException::class)
     fun handleObjectOptimisticLockingFailureException(e: ObjectOptimisticLockingFailureException): ProblemDetail {
         val problem = ProblemDetail.forStatusAndDetail(

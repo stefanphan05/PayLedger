@@ -1,6 +1,7 @@
 package com.stefan.payment_api_service.controller
 
 import com.stefan.payment_api_service.models.dto.TransactionRequestDTO
+import com.stefan.payment_api_service.models.dto.TransactionResponseDTO
 import com.stefan.payment_api_service.service.TransactionService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -20,12 +21,13 @@ class TransactionController(
 ) {
     @GetMapping("/{transactionId}")
     fun transaction(@PathVariable transactionId: UUID): ResponseEntity<Any> {
-        return ResponseEntity.ok(transactionService.getTransactionById(transactionId))
+        val transaction = transactionService.getTransactionById(transactionId)
+        return ResponseEntity.ok(TransactionResponseDTO.from(transaction))
     }
 
     @PostMapping
     fun createTransaction(@RequestBody @Valid transactionRequestDTO: TransactionRequestDTO): ResponseEntity<Any> {
-        val created = transactionService.createTransaction(transactionRequestDTO)
-        return ResponseEntity.status(HttpStatus.CREATED).body(created)
+        val transaction = transactionService.createTransaction(transactionRequestDTO)
+        return ResponseEntity.status(HttpStatus.CREATED).body(TransactionResponseDTO.from(transaction))
     }
 }
