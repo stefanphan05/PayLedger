@@ -1,6 +1,5 @@
 package com.stefan.payment_api_service.models.dto
 
-import com.stefan.payment_api_service.models.enum.TransactionStatus
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotBlank
