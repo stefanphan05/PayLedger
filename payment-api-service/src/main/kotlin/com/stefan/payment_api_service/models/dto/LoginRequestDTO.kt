@@ -6,8 +6,6 @@ import jakarta.validation.constraints.Size
 
 data class LoginRequestDTO(
     @field:NotBlank(message = "Email is required")
-    @field:Email(message = "Email must be a valid address")
-    @field:Size(max = 255, message = "Email must be at most 255 characters")
     val email: String,
 
     @field:NotBlank(message = "Password is required")
