@@ -13,13 +13,17 @@ class JwtUtilityTests {
 
     @Test
     fun `generateToken return email and userId`() {
-        val user = mockUser()
+        val userId = UUID.randomUUID()
+        val email = "test@example.com"
 
-        val token = jwtUtil.generateToken(user)
+        val token = jwtUtil.generateToken(
+            userId = userId,
+            email = email
+        )
 
-        assertEquals(user.email, jwtUtil.extractEmail(token))
-        assertEquals(user.id, jwtUtil.extractUserId(token))
-        assertTrue(jwtUtil.isValid(token))
+        assertEquals(email, jwtUtil.extractEmail(token))
+        assertEquals(userId, jwtUtil.extractUserId(token))
+        assertTrue(jwtUtil.isTokenValid(token))
     }
 
     @Test
@@ -29,23 +33,19 @@ class JwtUtilityTests {
             expirationMs = 3_600_000,
         )
 
-        assertFalse(jwtUtil.isValid(otherUtil.generateToken(mockUser())))
+        assertFalse(jwtUtil.isTokenValid(otherUtil.generateToken(
+            userId = UUID.randomUUID(),
+            email = "test@example.com"
+        )))
     }
 
     @Test
     fun `isValid rejects expired token`() {
         val expiredUtil = JwtUtility(secret = secret, expirationMs = -120_000)
 
-        assertFalse(jwtUtil.isValid(expiredUtil.generateToken(mockUser())))
-    }
-
-
-    private fun mockUser(): UserSecurity {
-        return UserSecurity(
-            id = UUID.randomUUID(),
-            email = "test@example.com",
-            userPassword = "hashedPassword",
-            userAuthorities = emptyList(),
-        )
+        assertFalse(jwtUtil.isTokenValid(expiredUtil.generateToken(
+            userId = UUID.randomUUID(),
+            email = "test@example.com"
+        )))
     }
 }
