@@ -1,10 +1,15 @@
 package com.stefan.payment_api_service.exception
 
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.HttpStatusCode
 import org.springframework.http.ProblemDetail
+import org.springframework.http.ResponseEntity
 import org.springframework.orm.ObjectOptimisticLockingFailureException
+import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.context.request.WebRequest
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
 
 @RestControllerAdvice
@@ -40,5 +45,23 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
             HttpStatus.INTERNAL_SERVER_ERROR,
             "An unexpected error occurred"
         )
+    }
+
+    override fun handleMethodArgumentNotValid(
+        ex: MethodArgumentNotValidException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        val errors = ex.bindingResult.fieldErrors.groupBy(
+            { it.field },
+            { it.defaultMessage ?: "Invalid value" }
+        )
+
+        val problem = ProblemDetail.forStatusAndDetail(status, "Request validation failed")
+        problem.title = "Validation Error"
+        problem.setProperty("errors", errors)
+
+        return handleExceptionInternal(ex, problem, headers, status, request)
     }
 }
