@@ -27,7 +27,7 @@ class JwtUtilityTests {
     }
 
     @Test
-    fun `isValid rejects token signed with another key`() {
+    fun `isTokenValid rejects token signed with another key`() {
         val otherUtil = JwtUtility(
             secret = Encoders.BASE64.encode(ByteArray(32) { 2 }),
             expirationMs = 3_600_000,
@@ -40,7 +40,7 @@ class JwtUtilityTests {
     }
 
     @Test
-    fun `isValid rejects expired token`() {
+    fun `isTokenValid rejects expired token`() {
         val expiredUtil = JwtUtility(secret = secret, expirationMs = -120_000)
 
         assertFalse(jwtUtil.isTokenValid(expiredUtil.generateToken(
