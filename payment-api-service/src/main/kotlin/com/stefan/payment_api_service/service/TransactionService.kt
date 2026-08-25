@@ -11,7 +11,7 @@ import java.util.UUID
 
 @Service
 class TransactionService(
-    val repository: TransactionRepository,
+    private val repository: TransactionRepository,
 ) {
     fun getTransactionById(id: UUID): Transaction {
         return repository.findById(id)
