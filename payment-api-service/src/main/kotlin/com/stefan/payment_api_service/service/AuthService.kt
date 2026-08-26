@@ -11,8 +11,10 @@ import com.stefan.payment_api_service.security.UserSecurity
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
+import java.util.UUID
 
 @Service
 class AuthService(
@@ -34,6 +36,11 @@ class AuthService(
         } catch (e: DataIntegrityViolationException) {
             throw EmailAlreadyInUseException(request.email)
         }
+    }
+
+    fun getCurrentUser(userId: UUID): User {
+        return userRepository.findById(userId)
+            .orElseThrow { UsernameNotFoundException("No user with id $userId") }
     }
 
     fun login(request: LoginRequestDTO): AuthResponseDTO {
