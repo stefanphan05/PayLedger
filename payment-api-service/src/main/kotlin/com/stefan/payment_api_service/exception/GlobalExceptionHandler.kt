@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
+import javax.naming.AuthenticationException
 
 @RestControllerAdvice
 class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
@@ -45,6 +46,14 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
             HttpStatus.INTERNAL_SERVER_ERROR,
             "An unexpected error occurred"
         )
+    }
+
+    @ExceptionHandler(AuthenticationException::class)
+    fun handleAuthenticationException(e: AuthenticationException): ProblemDetail {
+        logger.debug("Authentication failed: ${e.message}")
+        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid email or password")
+        problem.title = "Unauthorized"
+        return problem
     }
 
     override fun handleMethodArgumentNotValid(

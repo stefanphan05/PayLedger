@@ -15,7 +15,7 @@ import javax.crypto.SecretKey
 @Component
 class JwtUtility(
     @Value("\${jwt.secret}") secret: String,
-    @Value("\${jwt.expiration-ms}") private val expirationMs: Long
+    @Value("\${jwt.expiration-ms}") val expirationMs: Long
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
