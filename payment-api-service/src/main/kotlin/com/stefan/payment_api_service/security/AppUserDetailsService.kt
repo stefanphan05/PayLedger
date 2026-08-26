@@ -19,7 +19,8 @@ class AppUserDetailsService(
             id = user.id,
             email = user.email,
             userPassword = user.password,
-            userAuthorities = listOf(SimpleGrantedAuthority("ROLE_USER"))
+            userAuthorities = user.roles.map { SimpleGrantedAuthority("ROLE_${it.name}")
+            }
         )
     }
 }
