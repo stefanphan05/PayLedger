@@ -1,0 +1,3 @@
+jwt:
+  secret: YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=
+  expiration-ms: 3600000

@@ -1,8 +1,16 @@
 package com.stefan.payment_api_service.models.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
+import com.stefan.payment_api_service.models.enum.Role
+import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
+import jakarta.persistence.ElementCollection
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import jakarta.persistence.FetchType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
 import jakarta.persistence.Table
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
@@ -25,6 +33,7 @@ class User (
     @Column(name = "email", nullable = false, unique = true)
     var email: String,
 
+    @field:JsonIgnore
     @Column(name = "password", nullable = false)
     var password: String,
 
@@ -34,5 +43,11 @@ class User (
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: Instant? = null
+    var updatedAt: Instant? = null,
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name="user_roles", joinColumns = [JoinColumn(name = "user_id")])
+    @Column(name = "role", nullable = false)
+    @Enumerated(EnumType.STRING)
+    var roles: MutableSet<Role> = mutableSetOf(Role.USER)
 )

@@ -8,7 +8,7 @@ class UserSecurity(
     val id: UUID,
     val email: String,
     private val userPassword: String,
-    private val userAuthorities: MutableCollection<GrantedAuthority>
+    private val userAuthorities: Collection<GrantedAuthority>
 ): UserDetails {
     override fun getAuthorities() = userAuthorities
     override fun getPassword() = userPassword

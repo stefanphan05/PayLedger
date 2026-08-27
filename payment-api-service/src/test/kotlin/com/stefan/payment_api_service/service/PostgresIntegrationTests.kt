@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.orm.ObjectOptimisticLockingFailureException
+import org.springframework.test.context.ActiveProfiles
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
@@ -24,6 +25,7 @@ import java.util.UUID
 
 @SpringBootTest
 @Testcontainers
+@ActiveProfiles("test")
 class PostgresIntegrationTests @Autowired constructor (
     val transactionService: TransactionService,
     val transactionRepository: TransactionRepository
