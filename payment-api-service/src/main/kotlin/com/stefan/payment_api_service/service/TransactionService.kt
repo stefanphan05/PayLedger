@@ -9,6 +9,8 @@ import com.stefan.payment_api_service.exception.TransactionNotFoundException
 import com.stefan.payment_api_service.repository.TransactionRepository
 import com.stefan.payment_api_service.repository.UserRepository
 import com.stefan.payment_api_service.security.UserSecurity
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -43,6 +45,13 @@ class TransactionService(
 
         return repository.findByIDAndParty(id, requester.id)
             .orElseThrow { TransactionNotFoundException(id) }
+    }
+
+    fun getTransactionForUser(userId: UUID, pageable: Pageable): Page<Transaction> {
+        return repository.findAllByParty(
+            userId = userId,
+            pageable = pageable
+        )
     }
 
     @Transactional
