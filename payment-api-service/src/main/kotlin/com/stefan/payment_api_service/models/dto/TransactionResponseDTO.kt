@@ -15,6 +15,8 @@ data class TransactionResponseDTO(
 
     val currency: String,
     val status: TransactionStatus,
+    val senderId: UUID,
+    val recipientId: UUID,
     val createdAt: Instant?
 ) {
     companion object {
@@ -24,6 +26,8 @@ data class TransactionResponseDTO(
                 amount = transaction.amount,
                 currency = transaction.currency,
                 status = transaction.transactionStatus,
+                senderId = transaction.senderId,
+                recipientId = transaction.recipientId,
                 createdAt = transaction.createdAt
             )
         }

@@ -40,6 +40,26 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
         return problem
     }
 
+    @ExceptionHandler(RecipientNotFoundException::class)
+    fun handleRecipientNotFoundException(e: RecipientNotFoundException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.NOT_FOUND,
+            e.message
+        )
+        problem.title = "Recipient Not Found"
+        return problem
+    }
+
+    @ExceptionHandler(SelfTransferException::class)
+    fun handleSelfTransferException(e: SelfTransferException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            e.message
+        )
+        problem.title = "Invalid Transfer"
+        return problem
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleUnexpectedException(e: Exception): ProblemDetail {
         logger.error("Unhandled exception", e)

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Pattern
 import java.math.BigDecimal
+import java.util.UUID
 
 data class TransactionRequestDTO(
     @field:NotNull(message = "Amount is required")
@@ -16,4 +17,7 @@ data class TransactionRequestDTO(
     @field:NotBlank(message = "Currency code is required")
     @field:Pattern(regexp = "^[A-Z]{3}$", message = "Currency code must be a 3-letter ISO 4217 code (e.g. USD)")
     val currencyCode: String,
+
+    @field:NotNull(message = "RecipientID is required")
+    val recipientId: UUID
 )
