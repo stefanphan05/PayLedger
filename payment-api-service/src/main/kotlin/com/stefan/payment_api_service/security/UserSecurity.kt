@@ -17,4 +17,6 @@ class UserSecurity(
     override fun isAccountNonLocked() = true
     override fun isCredentialsNonExpired() = true
     override fun isEnabled() = true
+
+    fun isAdmin(): Boolean = userAuthorities.any { it.authority == "ROLE_ADMIN" }
 }
