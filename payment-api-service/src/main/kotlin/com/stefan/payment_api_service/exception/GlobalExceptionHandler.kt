@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
@@ -13,6 +14,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
+import tools.jackson.core.JacksonException
+import tools.jackson.databind.exc.InvalidFormatException
 
 @RestControllerAdvice
 class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
@@ -98,6 +101,34 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
         val problem = ProblemDetail.forStatusAndDetail(status, "Request validation failed")
         problem.title = "Validation Error"
         problem.setProperty("errors", errors)
+
+        return handleExceptionInternal(ex, problem, headers, status, request)
+    }
+
+    override fun handleHttpMessageNotReadable(
+        ex: HttpMessageNotReadableException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        val problem = ProblemDetail.forStatusAndDetail(status, "Request body is malformed or missing required fields")
+        problem.title = "Malformed Request"
+
+        // Jackson fails while constructing the DTO, before @Valid runs, so
+        // handleMethodArgumentNotValid never sees these. Report the offending
+        // field using the same "errors" shape so clients get one format.
+        val cause = ex.cause
+        if (cause is JacksonException) {
+            val field = cause.path.joinToString(".") { it.propertyName ?: "[${it.index}]" }
+            if (field.isNotEmpty()) {
+                val message = if (cause is InvalidFormatException) {
+                    "'${cause.value}' is not a valid ${cause.targetType.simpleName}"
+                } else {
+                    "This field is required"
+                }
+                problem.setProperty("errors", mapOf(field to listOf(message)))
+            }
+        }
 
         return handleExceptionInternal(ex, problem, headers, status, request)
     }
