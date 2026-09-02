@@ -62,6 +62,18 @@ allOpen {
 	annotation("jakarta.persistence.Embeddable")
 }
 
-tasks.withType<Test> {
-	useJUnitPlatform()
+tasks.named<Test>("test") {
+	useJUnitPlatform {
+		// Benchmarks are slow and measure timing, not correctness. Opt in with `./gradlew benchmark`.
+		excludeTags("benchmark")
+	}
+}
+
+tasks.register<Test>("benchmark") {
+	description = "Runs latency benchmarks excluded from the normal test task."
+	group = "verification"
+	testClassesDirs = sourceSets["test"].output.classesDirs
+	classpath = sourceSets["test"].runtimeClasspath
+	useJUnitPlatform { includeTags("benchmark") }
+	testLogging { showStandardStreams = true }
 }
