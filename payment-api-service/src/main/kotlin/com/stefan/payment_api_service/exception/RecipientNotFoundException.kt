@@ -2,5 +2,10 @@ package com.stefan.payment_api_service.exception
 
 import java.util.UUID
 
-class RecipientNotFoundException(id: UUID) : RuntimeException("Recipient with id: $id was not found") {
+class RecipientNotFoundException(message: String) : RuntimeException(message), ClientError {
+    constructor(id: UUID) : this("Recipient $id not found")
+
+    companion object {
+        fun fromMessage(message: String) = RecipientNotFoundException(message)
+    }
 }

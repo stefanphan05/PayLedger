@@ -24,7 +24,14 @@ data class TransactionRequestDTO(
 
     @field:NotNull(message = "RecipientID is required")
     val recipientId: UUID
-)
+) : IdempotentRequest {
+    override fun canonicalForm(): String =
+        listOf(
+            amount.stripTrailingZeros().toPlainString(),
+            currencyCode,
+            recipientId.toString(),
+        ).joinToString("|")
+}
 
 data class UpdateTransactionStatusDTO(
     @field:NotNull("Status is required")

@@ -15,7 +15,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+idempotency:
+  ttl: 24h
+  ambiguous-failure-hold: 60s
 
 jwt:
   secret: ${JWT_SECRET}

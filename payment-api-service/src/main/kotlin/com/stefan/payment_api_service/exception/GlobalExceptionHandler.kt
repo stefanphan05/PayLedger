@@ -9,7 +9,9 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
+import com.stefan.payment_api_service.service.IdempotencyService.Companion.HEADER_IDEMPOTENCY_KEY
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
@@ -63,6 +65,56 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
         return problem
     }
 
+    @ExceptionHandler(IdempotencyKeyReuseException::class)
+    fun handleIdempotencyKeyReuseException(e: IdempotencyKeyReuseException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            e.message
+        )
+        problem.title = "Idempotency Key Reused"
+        return problem
+    }
+
+    @ExceptionHandler(IdempotencyConflictException::class)
+    fun handleIdempotencyConflictException(e: IdempotencyConflictException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.CONFLICT,
+            e.message
+        )
+        problem.title = "Request In Progress"
+        return problem
+    }
+
+    @ExceptionHandler(InvalidIdempotencyKeyException::class)
+    fun handleInvalidIdempotencyKeyException(e: InvalidIdempotencyKeyException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed")
+        problem.title = "Validation Error"
+        problem.setProperty("errors", mapOf(HEADER_IDEMPOTENCY_KEY to listOf(e.message)))
+        return problem
+    }
+
+    // A missing @RequestHeader would otherwise be handled by the inherited
+    // ResponseEntityExceptionHandler as a bare 400 with no body detail. Declaring
+    // it here wins on specificity and keeps the "errors" shape clients already get
+    // from handleMethodArgumentNotValid and handleHttpMessageNotReadable.
+    @ExceptionHandler(MissingRequestHeaderException::class)
+    fun handleMissingRequestHeaderException(e: MissingRequestHeaderException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed")
+        problem.title = "Missing Header"
+        problem.setProperty("errors", mapOf(e.headerName to listOf("This header is required")))
+        return problem
+    }
+
+    @ExceptionHandler(IdempotencyReplayUnavailableException::class)
+    fun handleIdempotencyReplayUnavailableException(e: IdempotencyReplayUnavailableException): ProblemDetail {
+        // A registry gap is our bug, not the client's, so this is a 5xx - but the
+        // detail tells them the one thing that will work: use a different key.
+        logger.error("Stored idempotency failure could not be replayed", e)
+        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, e.message)
+        problem.title = "Replay Unavailable"
+        return problem
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleUnexpectedException(e: Exception): ProblemDetail {
         logger.error("Unhandled exception", e)
@@ -82,7 +134,7 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
 
     @ExceptionHandler(AccessDeniedException::class)
     fun handleAccessDeniedException(e: AccessDeniedException): ProblemDetail {
-        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "You are not allow to do that")
+        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "You are not allowed to do that")
         problem.title = "Forbidden"
         return problem
     }
