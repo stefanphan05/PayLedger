@@ -1,6 +1,6 @@
 package com.stefan.payment_api_service.service
 
-import com.stefan.payment_api_service.exception.IdempotencyConflictException
+import com.stefan.payment_api_service.exception.IdempotencyReplayUnavailableException
 import com.stefan.payment_api_service.exception.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.SelfTransferException
 import org.springframework.stereotype.Component
@@ -8,16 +8,34 @@ import org.springframework.stereotype.Component
 @Component
 class ClientErrorReplayer {
 
-    // A lookup table: "if the stored error type is X, rebuild it using this function"
+    /**
+     * How to rebuild each replayable error from its stored message.
+     *
+     * Keyed off `simpleName` so it matches what `IdempotencyRecord.failed` writes.
+     * `ClientErrorRegistryTests` asserts every ClientError appears here, so a new
+     * one that nobody registers fails the build rather than surfacing in
+     * production as an unreplayable key.
+     */
     private val rebuildFunctions: Map<String, (message: String) -> RuntimeException> = mapOf(
-        "SelfTransferException" to { _ -> SelfTransferException() },
-        "RecipientNotFoundException" to { message -> RecipientNotFoundException.fromMessage(message) },
+        SelfTransferException::class.simpleName!! to { _ -> SelfTransferException() },
+        RecipientNotFoundException::class.simpleName!! to { message -> RecipientNotFoundException.fromMessage(message) },
     )
 
-    /** Rebuilds and throws the original exception, so it hits the same handler as before. */
+    /** True if a stored failure of this type can be turned back into its original exception. */
+    fun canReplay(errorType: String) = rebuildFunctions.containsKey(errorType)
+
+    /**
+     * Rebuilds and throws the original exception, so it reaches the same handler
+     * that produced the first response and renders identically.
+     *
+     * An unrecognised type cannot be rendered faithfully. It reports that plainly
+     * rather than reusing IdempotencyConflictException, whose "already in progress"
+     * message would be untrue for a terminal record and would leave a polling
+     * client waiting for a resolution that never comes.
+     */
     fun rethrow(errorType: String, errorMessage: String): Nothing {
-        val rebuild =
-            rebuildFunctions[errorType] ?: throw IdempotencyConflictException()
+        val rebuild = rebuildFunctions[errorType]
+            ?: throw IdempotencyReplayUnavailableException(errorType)
 
         throw rebuild(errorMessage)
     }

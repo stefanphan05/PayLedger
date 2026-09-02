@@ -105,6 +105,16 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
         return problem
     }
 
+    @ExceptionHandler(IdempotencyReplayUnavailableException::class)
+    fun handleIdempotencyReplayUnavailableException(e: IdempotencyReplayUnavailableException): ProblemDetail {
+        // A registry gap is our bug, not the client's, so this is a 5xx - but the
+        // detail tells them the one thing that will work: use a different key.
+        logger.error("Stored idempotency failure could not be replayed", e)
+        val problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, e.message)
+        problem.title = "Replay Unavailable"
+        return problem
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleUnexpectedException(e: Exception): ProblemDetail {
         logger.error("Unhandled exception", e)

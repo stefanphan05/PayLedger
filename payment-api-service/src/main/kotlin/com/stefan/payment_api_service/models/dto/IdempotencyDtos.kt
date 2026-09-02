@@ -31,7 +31,7 @@ data class IdempotencyRecord(
             IdempotencyRecord(
                 state = IdempotencyState.FAILED,
                 requestHash = requestHash,
-                errorType = e::class.simpleName,
+                errorType = e::class.simpleName ?: e::class.java.name,
                 errorMessage = e.message,
             )
     }
