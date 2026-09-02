@@ -64,7 +64,10 @@ class TransactionController(
      * scoped to the caller, so two users may pick the same one without colliding.
      *
      * Retrying with the same key replays the original outcome instead of creating a
-     * second transaction, for 24 hours. Replays carry `Idempotent-Replay: true`.
+     * second transaction, for 24 hours. A replayed *success* carries
+     * `Idempotent-Replay: true`; a replayed *rejection* looks identical to a fresh
+     * one, because errors are rendered by the exception handler, which sets no
+     * headers. Informational only - the outcome is the same either way.
      *
      * GOTCHA: the key is bound to the request body it was first used with. A client
      * that *corrects* a rejected request and retries with the same key receives 422,

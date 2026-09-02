@@ -56,6 +56,12 @@ for _ in $(seq 1 90); do
   echo -n "."; sleep 1
 done
 
+# The loop above can also simply run out. Without this the script would carry on
+# and blame k6 for 100% check failures against a server that never came up.
+if ! curl -s -o /dev/null -m 2 "http://localhost:$APP_PORT/auth/login" 2>/dev/null; then
+  echo " - the app never became ready:"; tail -30 "$APP_LOG"; exit 1
+fi
+
 echo "==> running k6 (${VUS} VUs, ${DURATION} per scenario)"
 docker run --rm -i \
   --add-host=host.docker.internal:host-gateway \

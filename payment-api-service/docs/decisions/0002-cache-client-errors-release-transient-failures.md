@@ -33,8 +33,17 @@ Split failures by determinism, using a marker interface on the exception itself.
    `RecipientNotFoundException` implement it.
 2. **Marked exceptions are stored as `FAILED`** with the exception's simple name
    and message, and replayed to a matching retry.
-3. **Everything else deletes the key**, so a client can retry the same key
-   through a transient fault.
+3. **Everything else keeps the key but shortens its TTL** to
+   `idempotency.ambiguous-failure-hold` (60s). Retries inside that window get
+   `409`; afterwards the client may retry normally.
+
+   This started as an outright delete, which was wrong. `createTransaction` is
+   not `@Transactional`, so `save()` commits on its own and a connection drop
+   *at commit time* raises an exception even though the row may already exist.
+   Deleting the key there let the retry create a second payment - precisely the
+   failure this feature exists to prevent. Holding the key covers the window in
+   which the outcome is genuinely unknown, without stranding the payment for a
+   full day.
 4. **A replay rethrows the original exception type**, rebuilt by
    `ClientErrorReplayer` from a small type-name registry. `GlobalExceptionHandler`
    then renders it through the *same* handler that produced the first response,
@@ -50,15 +59,18 @@ Split failures by determinism, using a marker interface on the exception itself.
 - Cons: a two-second Postgres blip would be cached for 24 hours. The client
   could never retry that payment with the same key even though retrying would
   now succeed — the payment is effectively poisoned.
-- Rejected: it converts a recoverable outage into an unrecoverable one.
+- Rejected: it converts a recoverable outage into an unrecoverable one. The
+  bounded hold in decision 3 is this idea with a survivable expiry.
 
 ### Release the key on every failure
 
-- Pros: simplest; matches the first draft of the design.
+- Pros: simplest; matches the first draft of the design, and gives the best
+  availability during an outage.
 - Cons: a client retrying a self-transfer re-executes the full validation path
   and hits Postgres every time, for an answer that cannot change.
-- Rejected: minor, but it gives up a free optimisation and makes the `FAILED`
-  state in the lifecycle enum meaningless.
+- Rejected: it gives up a free optimisation, makes the `FAILED` state
+  meaningless, and - as the code review found - releasing on *every* failure
+  reopens the duplicate-payment hole whenever a commit fails ambiguously.
 
 ### Classify with a `when (e)` block inside the service
 

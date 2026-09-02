@@ -98,9 +98,13 @@ Require an `Idempotency-Key` header on `POST /transactions`, backed by Redis.
 - **24 hours of keys is real memory.** The TTL bounds growth, but Redis needs
   headroom for a day's POST volume, and `maxmemory-policy` must not be an
   eviction policy that can drop live keys early.
-- **Measured cost:** the layer adds ~0.68 ms at p99 to a create (1.33 ms →
-  2.01 ms), measured by `./gradlew benchmark`. A replayed retry costs ~0.5 ms
-  p99 because it makes two Redis calls and no SQL query at all.
+- **Measured cost:** the layer adds **~0.38 ms at p50** to a create, measured by
+  `./gradlew benchmark`. That figure is stable to within 0.02 ms across runs.
+  The p99 overhead ranges from 0.6 ms to 1.3 ms depending on the run, because
+  tail latency on a development machine is dominated by GC and scheduling noise
+  rather than by the three Redis round trips — quote the p50 figure, not a single
+  p99 sample. A replayed retry costs ~0.45 ms p99 because it makes two Redis
+  calls and no SQL query at all.
 - **Verified behaviour:** 0 duplicate rows under 10, 50, and 200 simultaneous
   retries of the same key (`ConcurrentRetryTests`), and 50 distinct keys still
   produce 50 rows, so idempotency does not over-collapse.

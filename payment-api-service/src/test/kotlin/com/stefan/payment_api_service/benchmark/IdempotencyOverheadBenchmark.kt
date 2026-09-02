@@ -127,7 +127,11 @@ class IdempotencyOverheadBenchmark @Autowired constructor(
     private fun timeBaseline(): Long {
         val request = newRequest()
         val start = System.nanoTime()
-        transactionService.createTransaction(request, sender.id)
+        // Mirrors exactly what the guarded path runs inside its block. Without the
+        // DTO mapping here, the delta would charge the idempotency layer for work
+        // the controller does either way.
+        ResponseEntity.status(HttpStatus.CREATED)
+            .body(TransactionResponseDTO.from(transactionService.createTransaction(request, sender.id)))
         return System.nanoTime() - start
     }
 
