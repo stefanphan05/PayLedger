@@ -102,6 +102,15 @@ class IdempotencyRepository (
     }
 
     /**
+     * Keeps the key but shortens its life, for a failure where the database write
+     * may already have committed. Deleting it would let a retry create a second
+     * payment; keeping it for the full TTL would strand the payment for a day.
+     */
+    fun holdBriefly(userId: UUID, key: String) {
+        redis.expire(redisKey(userId, key), properties.ambiguousFailureHold)
+    }
+
+    /**
      * All three state transitions above (markInProgress, complete, fail) do the
      * exact same low-level thing: overwrite the stored value, but WITHOUT
      * resetting the TTL countdown. This one private method is the single place

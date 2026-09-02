@@ -21,6 +21,7 @@ spring:
       port: ${REDIS_PORT:6379}
 idempotency:
   ttl: 24h
+  ambiguous-failure-hold: 60s
 
 jwt:
   secret: ${JWT_SECRET}
