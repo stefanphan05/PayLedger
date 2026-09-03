@@ -1,3 +1,5 @@
 jwt:
   secret: YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=
   expiration-ms: 3600000
+payment-events:
+  polling-enabled: false
