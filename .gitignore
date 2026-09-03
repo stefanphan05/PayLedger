@@ -11,3 +11,9 @@
 
 # Claude Code
 .claude/
+
+# planning
+planning/
+
+# Obsidian
+.obsidian/
