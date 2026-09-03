@@ -9,26 +9,55 @@ every transaction is scoped so only its sender, its recipient, or an admin can s
 You need JDK 17+ and Docker.
 
 ```bash
-# 1. Redis (required by POST /transactions)
-docker compose up -d redis
+# 1. Config - the defaults already match the compose stack
+cp .env.example .env
 
-# 2. Postgres connection details and a JWT secret
-cp .env.example .env        # then fill it in - see below
+# 2. Postgres + Redis
+docker compose up -d --wait
 
 # 3. Run
 ./gradlew bootRun
 ```
 
-`.env` is read by `spring.config.import` and holds:
+`docker-compose.yml` provides everything the app needs to run: **Postgres 16** on
+`:5432` (database `payment_db`) and **Redis 7** on `:6379`. Flyway creates the
+schema on first start.
+
+The config step comes first because `.env` feeds *both* Compose and Spring —
+Compose reads `DB_USERNAME` / `DB_PASSWORD` from it to create the Postgres role,
+and Spring reads the whole file via `spring.config.import`:
 
 | Variable | Purpose |
 | -------- | ------- |
-| `DB_URL` | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/payledger` |
-| `DB_USERNAME`, `DB_PASSWORD` | Postgres credentials |
+| `DB_URL` | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/payment_db` |
+| `DB_USERNAME`, `DB_PASSWORD` | Postgres credentials, used by Compose and the app |
 | `JWT_SECRET` | Base64-encoded HS256 key |
 
 Redis host and port default to `localhost:6379` and are overridable with
 `REDIS_HOST` / `REDIS_PORT`.
+
+Database contents live in the `pgdata` volume and survive `docker compose down`.
+Use `docker compose down -v` to drop the volume and replay the Flyway migrations
+from `V1` on the next start.
+
+> **Already running Postgres or Redis locally? Stop them first.**
+>
+> ```bash
+> lsof -nP -iTCP:5432 -sTCP:LISTEN    # anything here but Docker is a problem
+> lsof -nP -iTCP:6379 -sTCP:LISTEN
+> brew services stop postgresql@16    # or quit Postgres.app
+> brew services stop redis
+> ```
+>
+> A host service bound to `127.0.0.1` and Docker bound to `0.0.0.0` can coexist on
+> the same port, and the host one wins for `localhost` connections. When that
+> happens the container runs but goes unused — the app keeps working, silently
+> against the wrong instance, so nothing looks broken. If you suspect it, check
+> that the container is actually seeing traffic:
+>
+> ```bash
+> docker compose exec redis redis-cli dbsize   # 0 after a POST /transactions = wrong Redis
+> ```
 
 ## Commands
 
