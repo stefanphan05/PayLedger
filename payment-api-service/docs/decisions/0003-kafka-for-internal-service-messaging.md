@@ -4,7 +4,7 @@
 `payment-api-service` needs to tell other services that a transaction happened, without the two services being tightly coupled, and without losing that notification if something crashes halfway through.
 ## Decision
 Choose Kafka as the asynchronous message broker connecting `payment-api-service` to other downstream services
-1. `payment-api-service` publishes domain events (`payment.initiates`) to a topic
+1. `payment-api-service` publishes domain events (`PAYMENT_INITIATED / PAYMENT_STATUS_CHANGED`) to a topic
 2. consumers subscribe independently rather than being called directly
 ## Alternatives considered
 #### Option A - Synchronous REST API call to other services
