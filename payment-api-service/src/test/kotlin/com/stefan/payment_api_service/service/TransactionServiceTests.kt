@@ -128,7 +128,7 @@ class TransactionServiceTests {
         )
 
         whenever(userRepository.existsById(recipientId)).thenReturn(true)
-        whenever(transactionRepository.save(any())).thenAnswer { it.arguments[0] }
+        whenever(transactionRepository.saveAndFlush(any())).thenAnswer { it.arguments[0] }
 
         val result = transactionService.createTransaction(transactionRequestDTO, senderId)
 
@@ -136,7 +136,7 @@ class TransactionServiceTests {
         assertEquals(transactionRequestDTO.amount, result.amount)
         assertEquals(transactionRequestDTO.currencyCode, result.currency)
         assertNotNull(result.id)
-        verify(transactionRepository).save(any())
+        verify(transactionRepository).saveAndFlush(any())
     }
 
     @Test
@@ -148,12 +148,12 @@ class TransactionServiceTests {
         )
 
         whenever(userRepository.existsById(recipientId)).thenReturn(true)
-        whenever(transactionRepository.save(any())).thenAnswer { it.arguments[0] }
+        whenever(transactionRepository.saveAndFlush(any())).thenAnswer { it.arguments[0] }
 
         transactionService.createTransaction(transactionRequestDTO, senderId)
 
         val captor = argumentCaptor<Transaction>()
-        verify(transactionRepository).save(captor.capture())
+        verify(transactionRepository).saveAndFlush(captor.capture())
         assertEquals(senderId, captor.firstValue.senderId)
         assertEquals(recipientId, captor.firstValue.recipientId)
     }
@@ -172,7 +172,7 @@ class TransactionServiceTests {
 
         // the self-check must short-circuit before any lookup or write
         verify(userRepository, never()).existsById(any())
-        verify(transactionRepository, never()).save(any())
+        verify(transactionRepository, never()).saveAndFlush(any())
         // a rejected request never happened, so nothing may be announced downstream
         verify(paymentEventPublisher, never()).publish(any(), any())
     }
@@ -191,7 +191,7 @@ class TransactionServiceTests {
             transactionService.createTransaction(transactionRequestDTO, senderId)
         }
 
-        verify(transactionRepository, never()).save(any())
+        verify(transactionRepository, never()).saveAndFlush(any())
         verify(paymentEventPublisher, never()).publish(any(), any())
     }
 
@@ -204,7 +204,7 @@ class TransactionServiceTests {
         )
 
         whenever(userRepository.existsById(recipientId)).thenReturn(true)
-        whenever(transactionRepository.save(any())).thenAnswer { it.arguments[0] }
+        whenever(transactionRepository.saveAndFlush(any())).thenAnswer { it.arguments[0] }
 
         val saved = transactionService.createTransaction(transactionRequestDTO, senderId)
 

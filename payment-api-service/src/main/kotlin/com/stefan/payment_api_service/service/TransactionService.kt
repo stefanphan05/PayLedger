@@ -27,6 +27,17 @@ class TransactionService(
             .orElseThrow { TransactionNotFoundException(id) }
     }
 
+    /**
+     * @Transactional is what makes the outbox an outbox: the transaction row and the
+     * event row commit as one unit, or neither does. Without it these are two separate
+     * autocommits and a crash between them loses the event - the failure ADR-0004
+     * exists to prevent.
+     *
+     * saveAndFlush, not save, for the same reason: inside a transaction save() only
+     * queues the insert, so @CreationTimestamp has not fired yet and the event payload
+     * would carry "createdAt": null.
+     */
+    @Transactional
     fun createTransaction(transactionRequestDTO: TransactionRequestDTO, senderId: UUID): Transaction {
         if (senderId == transactionRequestDTO.recipientId) throw SelfTransferException()
         if (!userRepository.existsById(transactionRequestDTO.recipientId)) throw RecipientNotFoundException(transactionRequestDTO.recipientId)
@@ -39,7 +50,7 @@ class TransactionService(
             recipientId = transactionRequestDTO.recipientId,
         )
 
-        val savedTransaction = repository.save(transaction)
+        val savedTransaction = repository.saveAndFlush(transaction)
         paymentEventPublisher.publish(PaymentEventType.PAYMENT_INITIATED, savedTransaction)
         return savedTransaction
     }

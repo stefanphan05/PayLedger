@@ -75,9 +75,9 @@ class IdempotencyService(
     /**
      * A deterministic rejection is part of the answer, so it is stored and replayed.
      *
-     * Anything else is ambiguous: `createTransaction` is not transactional, so a
-     * connection drop at commit time can surface as an exception *after* the row
-     * landed. Releasing the key there would let a retry create a second payment —
+     * Anything else is ambiguous: a connection drop at commit time can surface as an
+     * exception even though the commit landed, so an exception here is not proof that
+     * nothing was written. Releasing the key there would let a retry create a second payment —
      * the exact failure this class exists to prevent — so the key is kept and its
      * life shortened instead. Retries are refused only while the outcome is
      * genuinely unknown, then the client is let through.

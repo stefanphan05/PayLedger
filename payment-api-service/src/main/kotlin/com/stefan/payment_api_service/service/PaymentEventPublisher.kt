@@ -1,42 +1,40 @@
 package com.stefan.payment_api_service.service
 
-import com.stefan.payment_api_service.config.PaymentEventProperties
 import com.stefan.payment_api_service.models.dto.PaymentEventEnvelope
+import com.stefan.payment_api_service.models.entity.OutboxEvent
 import com.stefan.payment_api_service.models.entity.Transaction
 import com.stefan.payment_api_service.models.enum.PaymentEventType
-import org.slf4j.LoggerFactory
-import org.springframework.kafka.core.KafkaTemplate
+import com.stefan.payment_api_service.repository.OutboxEventRepository
 import org.springframework.stereotype.Service
 import tools.jackson.databind.json.JsonMapper
 
+/**
+ * Records a payment event for delivery to Kafka.
+ *
+ * Writes a row and nothing else. There is no broker call here on purpose: this runs
+ * inside the CALLER's database transaction, so the event row commits together with the
+ * transaction it describes, or neither does. OutboxPoller does the actual sending.
+ *
+ * NOTE the reversal from the version this replaces, which caught everything and
+ * logged. This one THROWS. A failure to insert the row must roll the payment back -
+ * a committed payment with no event is precisely what ADR-0004 exists to prevent.
+ * There is also nothing left worth swallowing: the old catch existed to stop a Kafka
+ * outage failing a payment, and Kafka is no longer on this path.
+ */
 @Service
 class PaymentEventPublisher(
-    private val kafkaTemplate: KafkaTemplate<String, String>,
+    private val repository: OutboxEventRepository,
     private val jsonMapper: JsonMapper,
-    private val properties: PaymentEventProperties
 ) {
-    private val logger = LoggerFactory.getLogger(javaClass)
-
     fun publish(eventType: PaymentEventType, transaction: Transaction) {
         val envelope = PaymentEventEnvelope.of(eventType, transaction)
 
-        try {
-            kafkaTemplate.send(
-                properties.topic,
-                transaction.id.toString(),
-                jsonMapper.writeValueAsString(envelope),
-            ).whenComplete { _, failure ->
-                if (failure != null) logFailure(envelope, failure)
-            }
-        } catch (e: Exception) {
-            logFailure(envelope, e)
-        }
-    }
-
-    private fun logFailure(envelope: PaymentEventEnvelope, cause: Throwable) {
-        logger.error(
-            "LOST payment event: {} {} for transaction {} was not published",
-            envelope.eventType, envelope.eventId, envelope.transactionId, cause,
+        repository.save(
+            OutboxEvent(
+                transactionId = transaction.id,
+                eventType = eventType,
+                payload = jsonMapper.writeValueAsString(envelope),
+            )
         )
     }
 }
