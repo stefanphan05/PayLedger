@@ -71,8 +71,8 @@ Conventions worth knowing before contributing:
 
 Significant architectural decisions are recorded in `docs/decisions/`:
 
-- [ADR-001: Redis-backed idempotency keys for POST /transactions](docs/decisions/0001-redis-backed-idempotency-keys.md)
-- [ADR-002: Cache deterministic client errors, release the key on transient failures](docs/decisions/0002-cache-client-errors-release-transient-failures.md)
+- [ADR-001: Use optimistic locking for transaction updates](docs/decisions/0001-optimistic-locking-for-transaction-updates.md)
+- [ADR-002: Redis-backed idempotency keys for POST /transactions](docs/decisions/0002-redis-backed-idempotency-keys.md)
 
 ## API
 

@@ -81,8 +81,7 @@ class TransactionController(
      * @throws SelfTransferException 400, sender and recipient are the same user
      * @throws RecipientNotFoundException 404, no such recipient
      *
-     * See docs/decisions/0001-redis-backed-idempotency-keys.md for the design, and
-     * ADR-002 for why a rejected request keeps its key.
+     * See docs/decisions/0002-redis-backed-idempotency-keys.md for the design.
      */
     @PostMapping
     fun createTransaction(
