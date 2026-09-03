@@ -2,6 +2,7 @@ package com.stefan.payment_api_service.service
 
 import com.stefan.payment_api_service.models.dto.TransactionRequestDTO
 import com.stefan.payment_api_service.models.entity.Transaction
+import com.stefan.payment_api_service.models.enum.PaymentEventType
 import com.stefan.payment_api_service.models.enum.TransactionStatus
 import com.stefan.payment_api_service.exception.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.SelfTransferException
@@ -37,6 +38,9 @@ class TransactionServiceTests {
 
     @Mock
     lateinit var userRepository: UserRepository
+
+    @Mock
+    lateinit var paymentEventPublisher: PaymentEventPublisher
 
     @InjectMocks
     lateinit var transactionService: TransactionService
@@ -169,6 +173,8 @@ class TransactionServiceTests {
         // the self-check must short-circuit before any lookup or write
         verify(userRepository, never()).existsById(any())
         verify(transactionRepository, never()).save(any())
+        // a rejected request never happened, so nothing may be announced downstream
+        verify(paymentEventPublisher, never()).publish(any(), any())
     }
 
     @Test
@@ -186,6 +192,29 @@ class TransactionServiceTests {
         }
 
         verify(transactionRepository, never()).save(any())
+        verify(paymentEventPublisher, never()).publish(any(), any())
+    }
+
+    @Test
+    fun `createTransaction publishes a PAYMENT_INITIATED event for the saved transaction`() {
+        val transactionRequestDTO = TransactionRequestDTO(
+            amount = BigDecimal("42.50"),
+            currencyCode = "AUD",
+            recipientId = recipientId,
+        )
+
+        whenever(userRepository.existsById(recipientId)).thenReturn(true)
+        whenever(transactionRepository.save(any())).thenAnswer { it.arguments[0] }
+
+        val saved = transactionService.createTransaction(transactionRequestDTO, senderId)
+
+        val typeCaptor = argumentCaptor<PaymentEventType>()
+        val transactionCaptor = argumentCaptor<Transaction>()
+        verify(paymentEventPublisher).publish(typeCaptor.capture(), transactionCaptor.capture())
+
+        assertEquals(PaymentEventType.PAYMENT_INITIATED, typeCaptor.firstValue)
+        // the event must describe the row that was saved, not the incoming request
+        assertEquals(saved.id, transactionCaptor.firstValue.id)
     }
 
     @Test
@@ -215,6 +244,24 @@ class TransactionServiceTests {
     }
 
     @Test
+    fun `updateTransactionStatus publishes a PAYMENT_STATUS_CHANGED event carrying the new status`() {
+        val transaction = mockTransaction(transactionStatus = TransactionStatus.PENDING)
+        whenever(transactionRepository.findById(transaction.id)).thenReturn(Optional.of(transaction))
+        whenever(transactionRepository.save(any())).thenAnswer { it.arguments[0] }
+
+        transactionService.updateTransactionStatus(transaction.id, TransactionStatus.COMPLETED)
+
+        val typeCaptor = argumentCaptor<PaymentEventType>()
+        val transactionCaptor = argumentCaptor<Transaction>()
+        verify(paymentEventPublisher).publish(typeCaptor.capture(), transactionCaptor.capture())
+
+        assertEquals(PaymentEventType.PAYMENT_STATUS_CHANGED, typeCaptor.firstValue)
+        // published after the new status was applied - a consumer must see COMPLETED,
+        // not the PENDING the row held on the way in
+        assertEquals(TransactionStatus.COMPLETED, transactionCaptor.firstValue.transactionStatus)
+    }
+
+    @Test
     fun `updateTransactionStatus throws an exception if the transaction does not exist`() {
         val id = UUID.randomUUID()
         whenever(transactionRepository.findById(id)).thenReturn(Optional.empty())
@@ -224,6 +271,7 @@ class TransactionServiceTests {
         }
         verify(transactionRepository).findById(id)
         verify(transactionRepository, never()).save(any())
+        verify(paymentEventPublisher, never()).publish(any(), any())
     }
 
     private fun mockTransaction(

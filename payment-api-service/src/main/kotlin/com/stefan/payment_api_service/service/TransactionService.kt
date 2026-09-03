@@ -6,6 +6,7 @@ import com.stefan.payment_api_service.models.dto.TransactionRequestDTO
 import com.stefan.payment_api_service.models.entity.Transaction
 import com.stefan.payment_api_service.models.enum.TransactionStatus
 import com.stefan.payment_api_service.exception.TransactionNotFoundException
+import com.stefan.payment_api_service.models.enum.PaymentEventType
 import com.stefan.payment_api_service.repository.TransactionRepository
 import com.stefan.payment_api_service.repository.UserRepository
 import com.stefan.payment_api_service.security.UserSecurity
@@ -19,6 +20,7 @@ import java.util.UUID
 class TransactionService(
     private val repository: TransactionRepository,
     private val userRepository: UserRepository,
+    private val paymentEventPublisher: PaymentEventPublisher,
 ) {
     private fun getTransactionById(id: UUID): Transaction {
         return repository.findById(id)
@@ -37,7 +39,9 @@ class TransactionService(
             recipientId = transactionRequestDTO.recipientId,
         )
 
-        return repository.save(transaction)
+        val savedTransaction = repository.save(transaction)
+        paymentEventPublisher.publish(PaymentEventType.PAYMENT_INITIATED, savedTransaction)
+        return savedTransaction
     }
 
     fun getTransactionForRequester(id : UUID, requester: UserSecurity): Transaction {
@@ -58,6 +62,9 @@ class TransactionService(
     fun updateTransactionStatus(id: UUID, transactionStatus: TransactionStatus): Transaction {
         val transaction = getTransactionById(id)
         transaction.transactionStatus = transactionStatus
-        return repository.save(transaction)
+
+        val savedTransaction = repository.save(transaction)
+        paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
+        return savedTransaction
     }
 }
