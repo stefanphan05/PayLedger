@@ -1,5 +1,14 @@
 package com.stefan.payment_api_service.exception
 
+import com.stefan.payment_api_service.exception.auth.EmailAlreadyInUseException
+import com.stefan.payment_api_service.exception.idempotency.IdempotencyConflictException
+import com.stefan.payment_api_service.exception.idempotency.IdempotencyKeyReuseException
+import com.stefan.payment_api_service.exception.idempotency.IdempotencyReplayUnavailableException
+import com.stefan.payment_api_service.exception.idempotency.InvalidIdempotencyKeyException
+import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
+import com.stefan.payment_api_service.exception.transaction.SelfTransferException
+import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
+import com.stefan.payment_api_service.idempotency.service.IdempotencyService.Companion.HEADER_IDEMPOTENCY_KEY
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
@@ -9,7 +18,6 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
-import com.stefan.payment_api_service.service.IdempotencyService.Companion.HEADER_IDEMPOTENCY_KEY
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.annotation.ExceptionHandler
