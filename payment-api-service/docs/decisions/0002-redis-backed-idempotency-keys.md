@@ -1,5 +1,4 @@
 # ADR-002: Redis-backed idempotency keys for POST /transactions
-**Status**: Accepted
 **Date**: 02-09-2026
 ## Context
 **Problem**: `POST /transactions` created a new row on every call. If the client retried, because the response was lost, connection dropped, ..., created a second duplicate payment. Nothing in the request let the server recognise a retry as the same intent

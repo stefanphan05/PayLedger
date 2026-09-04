@@ -19,6 +19,25 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        # Not a default. send() blocks synchronously waiting for cluster metadata,
+        # and the default is 60s - long enough that an unreachable broker would wedge
+        # a poller thread for a minute per batch. No user request waits on this since
+        # the outbox moved sending off the request thread; it just keeps the poller
+        # failing fast so the next tick can retry.
+        max.block.ms: 1000
+payment-events:
+  topic: payment-events
+  partitions: 3
+  poll-interval: 1s
+  batch-size: 100
+  send-timeout: 5s
+
 idempotency:
   ttl: 24h
   ambiguous-failure-hold: 60s

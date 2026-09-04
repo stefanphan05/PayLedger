@@ -23,5 +23,46 @@ services:
       timeout: 3s
       retries: 15
 
+  kafka:
+    # Same image Testcontainers uses, on purpose: a different broker locally and in
+    # tests is a classic "works in tests, fails on my machine".
+    image: apache/kafka:4.1.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      # Two ports, only one of which you ever connect to:
+      #   9092 - the broker. This is the one.
+      #   9093 - the KRaft controller quorum. Kafka 4 has no ZooKeeper, so the broker
+      #          runs an internal controller for cluster metadata. Nothing outside the
+      #          container ever talks to it, which is why it is not published below.
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+
+      # What the broker tells clients to connect to. It must be reachable FROM the
+      # client, and our only client is the app on the host, so: localhost:9092.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    ports: [ "9092:9092" ]
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      # kafka-topics.sh is a JVM launch, not a 5ms probe like pg_isready, so this
+      # needs a longer timeout than the 3s the other services use.
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1" ]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+
 volumes:
   pgdata:
+  kafkadata:
+

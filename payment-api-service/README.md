@@ -74,20 +74,51 @@ needed to run them.
 
 ## Architecture
 
+Top level is by feature, and each feature is then split by layer. Everything one
+feature needs lives under one directory, so a change to idempotency rarely leaves
+`idempotency/`, and within it you go straight to the layer you want.
+
 ```
-controller/   HTTP layer - reads headers, delegates, maps entities to DTOs
-service/      Business logic and the idempotency decision tree
-repository/   Spring Data JPA interfaces, plus the hand-written Redis repository
-models/       dto/, entity/, enum/
-exception/    One exception per file + GlobalExceptionHandler (RFC 7807)
-security/     JWT filter, SecurityConfig, UserSecurity, request hashing
-config/       Typed @ConfigurationProperties
+auth/          controller/  AuthController
+               service/     AuthService
+               repository/  UserRepository
+               model/       AuthDtos, User, Role
+
+transaction/   controller/  TransactionController
+               service/     TransactionService
+               repository/  TransactionRepository
+               model/       TransactionDtos, Transaction, TransactionStatus
+
+idempotency/   service/     IdempotencyService, ClientErrorReplayer, RequestHasher
+               repository/  IdempotencyRepository (Redis, hand-written)
+               model/       IdempotencyDtos, IdempotencyState
+               config/      IdempotencyProperties
+
+outbox/        service/     OutboxPoller, OutboxPublisher, PaymentEventPublisher
+               repository/  OutboxEventRepository
+               model/       OutboxEvent, PaymentEventDtos, PaymentEventType
+               config/      PaymentEventProperties, KafkaTopicConfig
+
+shared/        Cross-cutting pieces used by more than one feature
+  security/    SecurityConfig, JwtAuthenticationFilter, JwtUtility,
+               AppUserDetailsService, UserSecurity
+
+exception/     ClientError + GlobalExceptionHandler (RFC 7807), then one
+               subpackage per feature holding that feature's exceptions:
+               auth/, transaction/, idempotency/
 ```
+
+`idempotency/` and `outbox/` have no `controller/` — neither is reached over HTTP
+directly.
+
+`src/test` groups by feature only — `transaction/`, `idempotency/`, `outbox/`,
+`shared/security/` — without the layer split, so a feature's unit and integration
+tests sit side by side.
 
 Conventions worth knowing before contributing:
 
 - **Errors are RFC 7807 `ProblemDetail`.** Every failure mode gets a dedicated
-  exception in `exception/` and a handler that sets a `title`. Validation
+  exception under `exception/<feature>/` and a handler that sets a `title`. Validation
   failures additionally carry an `errors` map of field to messages — new
   validation paths should match that shape.
 - **DTOs are grouped by domain** in one file (`TransactionDtos.kt`), not one file
