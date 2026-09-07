@@ -6,10 +6,10 @@ import com.stefan.ledger_service.ledger.model.Account
 import com.stefan.ledger_service.ledger.model.AccountClass
 import com.stefan.ledger_service.ledger.model.EntryDirection
 import com.stefan.ledger_service.ledger.model.LedgerEntry
-import com.stefan.ledger_service.ledger.model.ProcessedEvent
 import com.stefan.ledger_service.ledger.model.RejectionReason
 import com.stefan.ledger_service.ledger.repository.AccountRepository
 import com.stefan.ledger_service.ledger.repository.LedgerEntryRepository
+import com.stefan.ledger_service.ledger.repository.ProcessedEventRepository
 import com.stefan.ledger_service.outbox.model.LedgerEventType
 import com.stefan.ledger_service.outbox.service.LedgerEventPublisher
 import jakarta.persistence.EntityManager
@@ -23,6 +23,7 @@ import java.util.UUID
 class LedgerService(
     private val accounts: AccountRepository,
     private val entries: LedgerEntryRepository,
+    private val processedEvents: ProcessedEventRepository,
     private val entityManager: EntityManager,
     private val ledgerEvents: LedgerEventPublisher,
 ) {
@@ -51,13 +52,7 @@ class LedgerService(
     }
 
     private fun markEventProcessed(envelope: PaymentEventEnvelope) {
-        entityManager.persist(
-            ProcessedEvent(
-                envelope.eventId,
-                envelope.transactionId
-            )
-        )
-        entityManager.flush()
+        processedEvents.record(envelope.eventId, envelope.transactionId)
     }
 
     private fun validateTransfer(
