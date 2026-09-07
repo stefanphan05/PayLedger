@@ -2,10 +2,6 @@ spring:
   application:
     name: payment-api-service
   config:
-    # Two locations, because the working directory differs by how you start it:
-    # `./gradlew bootRun` from this module resolves ../.env, running from the repo
-    # root resolves .env. The .env itself lives at the root - one file for a stack
-    # that is now two services.
     import: "optional:file:.env[.properties],optional:file:../.env[.properties]"
   datasource:
     url: ${PAYMENT_DB_URL}
@@ -29,11 +25,6 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
-        # Not a default. send() blocks synchronously waiting for cluster metadata,
-        # and the default is 60s - long enough that an unreachable broker would wedge
-        # a poller thread for a minute per batch. No user request waits on this since
-        # the outbox moved sending off the request thread; it just keeps the poller
-        # failing fast so the next tick can retry.
         max.block.ms: 1000
 payment-events:
   topic: payment-events
