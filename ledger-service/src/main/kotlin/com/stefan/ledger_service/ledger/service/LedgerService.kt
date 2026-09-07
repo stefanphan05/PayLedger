@@ -10,10 +10,12 @@ import com.stefan.ledger_service.ledger.model.ProcessedEvent
 import com.stefan.ledger_service.ledger.model.RejectionReason
 import com.stefan.ledger_service.ledger.repository.AccountRepository
 import com.stefan.ledger_service.ledger.repository.LedgerEntryRepository
+import com.stefan.ledger_service.outbox.model.LedgerEventType
+import com.stefan.ledger_service.outbox.service.LedgerEventPublisher
 import jakarta.persistence.EntityManager
-import jakarta.transaction.Transactional
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -22,6 +24,7 @@ class LedgerService(
     private val accounts: AccountRepository,
     private val entries: LedgerEntryRepository,
     private val entityManager: EntityManager,
+    private val ledgerEvents: LedgerEventPublisher,
 ) {
     /**
      * Everything for one even in ONE transaction
@@ -38,11 +41,12 @@ class LedgerService(
         // validate the transaction
         val rejection = validateTransfer(sender, recipient, payment)
         if (rejection != null) {
+            ledgerEvents.publish(LedgerEventType.PAYMENT_FAILED, payment.transactionId, rejection)
             return LedgerOutcome.Rejected(rejection)
         }
 
         recordTransfer(sender, recipient, payment)
-
+        ledgerEvents.publish(LedgerEventType.PAYMENT_COMPLETED, payment.transactionId)
         return LedgerOutcome.Applied
     }
 

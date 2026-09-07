@@ -11,7 +11,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
-    show-sql: true
+    # Off by default. The poller runs its SELECT every second whether or not there is
+    # anything to send, so leaving this on buries every application log line under
+    # thousands of identical queries. Turn it on for one run when you need it:
+    #   ./gradlew bootRun --args='--spring.jpa.show-sql=true'
+    show-sql: false
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -25,3 +29,15 @@ spring:
       enable-auto-commit: false
     listener:
       ack-mode: record
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        max.block.ms: 1000
+
+ledger-events:
+  topic: ledger-events
+  partitions: 3
+  poll-interval: 1s
+  batch-size: 100
+  send-timeout: 5s
