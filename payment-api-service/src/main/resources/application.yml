@@ -2,11 +2,15 @@ spring:
   application:
     name: payment-api-service
   config:
-    import: "optional:file:.env[.properties]"
+    # Two locations, because the working directory differs by how you start it:
+    # `./gradlew bootRun` from this module resolves ../.env, running from the repo
+    # root resolves .env. The .env itself lives at the root - one file for a stack
+    # that is now two services.
+    import: "optional:file:.env[.properties],optional:file:../.env[.properties]"
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: ${PAYMENT_DB_URL}
+    username: ${PAYMENT_DB_USERNAME}
+    password: ${PAYMENT_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
