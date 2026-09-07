@@ -135,12 +135,19 @@ Conventions worth knowing before contributing:
 
 ### Decisions
 
-Significant architectural decisions are recorded in `docs/decisions/`:
+Significant architectural decisions are recorded in [`docs/decisions/`](../docs/decisions) at the
+repo root, one numbered sequence across both services. Each is tagged with a `**Service:**` line;
+the ones below govern this service.
 
-- [ADR-001: Use optimistic locking for transaction updates](docs/decisions/0001-optimistic-locking-for-transaction-updates.md)
-- [ADR-002: Redis-backed idempotency keys for POST /transactions](docs/decisions/0002-redis-backed-idempotency-keys.md)
+- [ADR-0001: Use optimistic locking for transaction updates](../docs/decisions/0001-optimistic-locking-for-transaction-updates.md)
+- [ADR-0002: Redis-backed idempotency keys for POST /transactions](../docs/decisions/0002-redis-backed-idempotency-keys.md)
+- [ADR-0003: Use Kafka as the event transport between services](../docs/decisions/0003-kafka-for-internal-service-messaging.md)
+- [ADR-0004: Use the transactional outbox pattern for publishing Kafka events](../docs/decisions/0004-outbox-pattern-for-kafka-events.md)
 
 ## API
+
+Full reference — request and response shapes, every error, idempotency semantics —
+in [`docs/api.md`](../docs/api.md). Summary:
 
 | Method | Path | Notes |
 | ------ | ---- | ----- |

@@ -7,6 +7,11 @@ PayLedger is a miniature payment system designed like real-world fintech platfor
 ### ledger-service
 `ledger-service` acts as the private back-office accountant that never talks to the outside internet. It picks up that message, checks if the sender actually has enough funds, moves the balance using proper double-entry bookkeeping by taking that $15 from one account and adding $15 to the other. Once the money is safely moved, it sends a note back so the front door can officially flip the transaction status from "PENDING" to "COMPLETED".
 
+## Documentation
+
+- [API reference](docs/api.md) — every endpoint on `payment-api-service`
+- [Decisions](docs/decisions) — numbered ADRs across both services
+
 ## Tech Stack & Architecture Roles
 
 | Layer / Tool              | Technology              | Purpose in PayLedger                                                    |
