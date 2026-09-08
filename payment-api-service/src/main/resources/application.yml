@@ -26,12 +26,24 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
         max.block.ms: 1000
+    consumer:
+      group-id: payment-api-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+
 payment-events:
   topic: payment-events
   partitions: 3
   poll-interval: 1s
   batch-size: 100
   send-timeout: 5s
+
+ledger-events:
+  topic: ledger-events
 
 idempotency:
   ttl: 24h
