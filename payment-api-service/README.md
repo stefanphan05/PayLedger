@@ -9,34 +9,40 @@ every transaction is scoped so only its sender, its recipient, or an admin can s
 You need JDK 17+ and Docker.
 
 ```bash
-# 1. Config - the defaults already match the compose stack
-cp .env.example .env
+# 1. Config - the defaults already match the compose stack.
+#    Both live at the REPO ROOT, one directory up, because the stack is now
+#    two services sharing one set of infrastructure.
+cp ../.env.example ../.env
 
-# 2. Postgres + Redis
-docker compose up -d --wait
+# 2. Postgres + Redis + Kafka, from the repo root
+(cd .. && docker compose up -d --wait)
 
 # 3. Run
 ./gradlew bootRun
 ```
 
-`docker-compose.yml` provides everything the app needs to run: **Postgres 16** on
-`:5432` (database `payment_db`) and **Redis 7** on `:6379`. Flyway creates the
+The root `docker-compose.yml` provides everything the app needs: **Postgres 16** on
+`:5432` (database `payment_db`, service `payments-db`) and **Redis 7** on `:6379`,
+alongside Kafka and the `ledger-db` that `ledger-service` owns. Flyway creates the
 schema on first start.
 
 The config step comes first because `.env` feeds *both* Compose and Spring —
-Compose reads `DB_USERNAME` / `DB_PASSWORD` from it to create the Postgres role,
-and Spring reads the whole file via `spring.config.import`:
+Compose reads `PAYMENT_DB_USERNAME` / `PAYMENT_DB_PASSWORD` from it to create the
+Postgres role, and Spring reads the whole file via `spring.config.import`:
 
 | Variable | Purpose |
 | -------- | ------- |
-| `DB_URL` | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/payment_db` |
-| `DB_USERNAME`, `DB_PASSWORD` | Postgres credentials, used by Compose and the app |
+| `PAYMENT_DB_URL` | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/payment_db` |
+| `PAYMENT_DB_USERNAME`, `PAYMENT_DB_PASSWORD` | Postgres credentials, used by Compose and the app |
 | `JWT_SECRET` | Base64-encoded HS256 key |
+
+Variables are prefixed per service (`PAYMENT_DB_*`, `LEDGER_DB_*`) because one root
+`.env` now serves the whole stack.
 
 Redis host and port default to `localhost:6379` and are overridable with
 `REDIS_HOST` / `REDIS_PORT`.
 
-Database contents live in the `pgdata` volume and survive `docker compose down`.
+Database contents live in the `payments-data` volume and survive `docker compose down`.
 Use `docker compose down -v` to drop the volume and replay the Flyway migrations
 from `V1` on the next start.
 
@@ -129,12 +135,19 @@ Conventions worth knowing before contributing:
 
 ### Decisions
 
-Significant architectural decisions are recorded in `docs/decisions/`:
+Significant architectural decisions are recorded in [`docs/decisions/`](../docs/decisions) at the
+repo root, one numbered sequence across both services. Each is tagged with a `**Service:**` line;
+the ones below govern this service.
 
-- [ADR-001: Use optimistic locking for transaction updates](docs/decisions/0001-optimistic-locking-for-transaction-updates.md)
-- [ADR-002: Redis-backed idempotency keys for POST /transactions](docs/decisions/0002-redis-backed-idempotency-keys.md)
+- [ADR-0001: Use optimistic locking for transaction updates](../docs/decisions/0001-optimistic-locking-for-transaction-updates.md)
+- [ADR-0002: Redis-backed idempotency keys for POST /transactions](../docs/decisions/0002-redis-backed-idempotency-keys.md)
+- [ADR-0003: Use Kafka as the event transport between services](../docs/decisions/0003-kafka-for-internal-service-messaging.md)
+- [ADR-0004: Use the transactional outbox pattern for publishing Kafka events](../docs/decisions/0004-outbox-pattern-for-kafka-events.md)
 
 ## API
+
+Full reference — request and response shapes, every error, idempotency semantics —
+in [`docs/api.md`](../docs/api.md). Summary:
 
 | Method | Path | Notes |
 | ------ | ---- | ----- |

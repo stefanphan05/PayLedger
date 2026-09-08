@@ -1,0 +1,14 @@
+ledger-events:
+  # @ConditionalOnProperty then excludes OutboxPoller entirely, so no background tick
+  # races the assertions. Tests call publishBatch() directly when they need it.
+  polling-enabled: false
+
+spring:
+  kafka:
+    listener:
+      # Without this the @KafkaListener connects to whatever KAFKA_BOOTSTRAP_SERVERS
+      # resolves to, which is the real local broker. Tests would then consume live
+      # events off payment-events and apply them to the test database.
+      auto-startup: false
+  jpa:
+    show-sql: false
