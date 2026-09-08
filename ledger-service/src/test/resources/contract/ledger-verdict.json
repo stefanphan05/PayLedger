@@ -1,0 +1,10 @@
+{
+  "eventId": "@eventId@",
+  "eventType": "@eventType@",
+  "occurredAt": "2026-09-08T00:00:00Z",
+  "transactionId": "@transactionId@",
+  "payload": {
+    "transactionId": "@transactionId@",
+    "reason": "@reason@"
+  }
+}

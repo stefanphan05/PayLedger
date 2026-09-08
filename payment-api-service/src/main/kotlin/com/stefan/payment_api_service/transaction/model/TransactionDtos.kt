@@ -49,7 +49,8 @@ data class TransactionResponseDTO(
     val status: TransactionStatus,
     val senderId: UUID,
     val recipientId: UUID,
-    val createdAt: Instant?
+    val createdAt: Instant?,
+    val failureReason: String?,
 ) {
     companion object {
         fun from(transaction: Transaction): TransactionResponseDTO {
@@ -60,7 +61,8 @@ data class TransactionResponseDTO(
                 status = transaction.transactionStatus,
                 senderId = transaction.senderId,
                 recipientId = transaction.recipientId,
-                createdAt = transaction.createdAt
+                createdAt = transaction.createdAt,
+                failureReason = transaction.failureReason,
             )
         }
     }

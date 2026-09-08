@@ -4,6 +4,8 @@ import com.stefan.payment_api_service.auth.repository.UserRepository
 import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
+import com.stefan.payment_api_service.ledger.model.LedgerEventEnvelope
+import com.stefan.payment_api_service.ledger.repository.ProcessedEventRepository
 import com.stefan.payment_api_service.outbox.service.PaymentEventPublisher
 import com.stefan.payment_api_service.outbox.model.PaymentEventType
 import com.stefan.payment_api_service.shared.security.UserSecurity
@@ -11,6 +13,7 @@ import com.stefan.payment_api_service.transaction.model.Transaction
 import com.stefan.payment_api_service.transaction.repository.TransactionRepository
 import com.stefan.payment_api_service.transaction.model.TransactionRequestDTO
 import com.stefan.payment_api_service.transaction.model.TransactionStatus
+import org.slf4j.LoggerFactory
 import java.util.UUID
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -22,7 +25,10 @@ class TransactionService(
     private val repository: TransactionRepository,
     private val userRepository: UserRepository,
     private val paymentEventPublisher: PaymentEventPublisher,
+    private val processedEvents: ProcessedEventRepository
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     private fun getTransactionById(id: UUID): Transaction {
         return repository.findById(id)
             .orElseThrow { TransactionNotFoundException(id) }
@@ -75,6 +81,31 @@ class TransactionService(
         val transaction = getTransactionById(id)
         transaction.transactionStatus = transactionStatus
 
+        // Only the ledger's verdict sets a reason. A manual override has none to give, so
+        // leaving the old one attached would explain a status that no longer exists.
+        transaction.failureReason = null
+
+        val savedTransaction = repository.save(transaction)
+        paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
+        return savedTransaction
+    }
+
+    @Transactional
+    fun settle(event: LedgerEventEnvelope, status: TransactionStatus): Transaction {
+        processedEvents.record(event.eventId, event.transactionId)
+
+        val transaction = getTransactionById(event.transactionId)
+
+        if (transaction.transactionStatus != TransactionStatus.PENDING) {
+            logger.warn(
+                "Ledger verdict {} overwrites {} on transaction {}",
+                status, transaction.transactionStatus, transaction.id,
+            )
+        }
+
+        transaction.transactionStatus = status
+
+        transaction.failureReason = event.payload.reason
         val savedTransaction = repository.save(transaction)
         paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
         return savedTransaction

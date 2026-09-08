@@ -4,6 +4,7 @@ import com.stefan.payment_api_service.auth.repository.UserRepository
 import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
+import com.stefan.payment_api_service.ledger.repository.ProcessedEventRepository
 import com.stefan.payment_api_service.outbox.model.PaymentEventType
 import com.stefan.payment_api_service.outbox.service.PaymentEventPublisher
 import com.stefan.payment_api_service.shared.security.UserSecurity
@@ -43,6 +44,9 @@ class TransactionServiceTests {
 
     @Mock
     lateinit var paymentEventPublisher: PaymentEventPublisher
+
+    @Mock
+    lateinit var processedEvents: ProcessedEventRepository
 
     @InjectMocks
     lateinit var transactionService: TransactionService

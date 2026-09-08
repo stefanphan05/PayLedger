@@ -3,3 +3,11 @@ jwt:
   expiration-ms: 3600000
 payment-events:
   polling-enabled: false
+
+spring:
+  kafka:
+    listener:
+      # Otherwise every @SpringBootTest starts the listener against whatever
+      # KAFKA_BOOTSTRAP_SERVERS resolves to - the real local broker - and consumes
+      # live ledger-events into the test database.
+      auto-startup: false

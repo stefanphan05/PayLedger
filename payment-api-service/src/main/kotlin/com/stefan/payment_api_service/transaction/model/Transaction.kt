@@ -42,5 +42,8 @@ class Transaction (
 
     @Version
     @Column(name = "version", nullable = false)
-    var version: Long = 0
+    var version: Long = 0,
+
+    @Column(name = "failure_reason", length = 50)
+    var failureReason: String? = null
 )

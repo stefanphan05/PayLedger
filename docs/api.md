@@ -198,12 +198,17 @@ curl -X POST http://localhost:8080/transactions \
   "status": "PENDING",
   "senderId": "3f1b7a2e-...",
   "recipientId": "9c2d5b10-...",
-  "createdAt": "2026-09-08T10:22:04Z"
+  "createdAt": "2026-09-08T10:22:04Z",
+  "failureReason": null
 }
 ```
 
 `amount` is serialised as a **JSON string** to avoid float rounding; parse it with a
 decimal type, not a double.
+
+`failureReason` is `null` unless `status` is `FAILED`, and is free text — treat it as a
+message to show, not a code to branch on. Today `ledger-service` sends
+`INSUFFICIENT_FUNDS`, `CURRENCY_MISMATCH` or `SELF_TRANSFER`, and may add more.
 
 ### Idempotency
 
@@ -253,6 +258,11 @@ curl http://localhost:8080/transactions/d41f0c88-... -H "Authorization: Bearer $
 ```
 
 **`200 OK`** — same shape as the create response.
+
+This is the endpoint to poll for the outcome. A payment is created `PENDING` and
+usually settles within a few seconds, once `ledger-service` has posted it and the
+verdict has travelled back. `COMPLETED` and `FAILED` are final — nothing moves a
+transaction out of them.
 
 **Errors:** `404 Transaction Not Found` — `Transaction with id <id> was not found`
 (also returned when the caller is not a party to it).

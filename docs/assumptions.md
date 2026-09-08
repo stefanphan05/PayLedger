@@ -17,13 +17,17 @@ What this project simplifies on purpose, so "what are the limits of your system?
 * `eventType` is a String, and unknown types are ignored rather than failing. Unknown JSON fields are ignored too.
 * A rejected payment is final. `INSUFFICIENT_FUNDS` is never retried, even if the account is funded a second later. Retrying means making a new payment.
 * One consumer thread. All 3 partitions are handled sequentially, so the `version` column on `accounts` is not exercised yet.
-* The ledger does not publish anything yet. Outcomes are only logged.
+* The ledger publishes its verdict to `ledger-events` through its own outbox. `payment-api-service` is the only consumer.
+* `PAYMENT_STATUS_CHANGED` is published but nothing reads it. It is left in place on purpose: it is the hook a notification service would subscribe to, and a record of every status change. The ledger ignores it, so it cannot loop back.
 
 ## Services
 * No shared database and no shared code. The event DTOs are duplicated in
   `ledger-service` on purpose: the contract is the JSON, not a Kotlin class.
 * The ledger ignores the `status` field the API sends. It decides the outcome itself.
-* Payments stay PENDING forever in `payment-api-service`, because nothing consumes the ledger's decision yet. That is feature 07.
+* A payment reaches COMPLETED or FAILED only after the ledger has decided. Until then it stays PENDING, so clients must poll.
+* The ledger's verdict wins. It overwrites whatever status the transaction had, including one an admin set by hand.
+* The rejection reason is stored as plain text, not an enum. The API never has to know the ledger's full list of reasons.
+* A verdict naming a transaction the API does not have is logged and dropped. No amount of retrying would make it exist.
 ## Infrastructure
 * Single node everything. One Postgres per service, one Kafka broker with replication factor 1, one Redis.
 * Local development only. The root `.env` holds throwaway credentials.
@@ -32,8 +36,7 @@ What this project simplifies on purpose, so "what are the limits of your system?
 ## Known gaps
 Two things below are real bugs waiting to happen, not accepted trade offs.
 * **No currency validation.** A EUR payment creates EUR wallets even though no EUR funding account exists. Harmless today (it gets rejected for insufficient funds), but once deposits work you could have EUR owed to users with no EUR held. Fix: reject when no ASSET account exists for that currency.
-* **No error handler.** One unparseable record blocks its partition forever. Fix is step
-  5 of feature 06.
+* **No error handler.** A message that cannot be read is retried ten times and then dropped, with nothing kept to look at afterwards. Fix is a dead letter topic in feature 08.
 ## Health check
 
 Balances must reconcile per currency. Summing across currencies adds AUD to USD and means nothing.
