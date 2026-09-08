@@ -39,6 +39,9 @@ class LedgerEventListener(
                 throw e
             }
         } catch (e: TransactionNotFoundException) {
+            // Dropped on purpose. We were told about a payment we have no record of,
+            // and trying again will not make it appear.
+            // Feature 08 adds a dead letter topic, which is a better home than a log line.
             logger.error("Verdict for unknown transaction {}", event.transactionId, e)
         }
     }
