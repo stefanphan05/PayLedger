@@ -10,6 +10,12 @@ PayLedger is a miniature payment system designed like real-world fintech platfor
 ### insights-service
 `insights-service` is the one you can talk to. Ask it "why did transaction demo-8 fail?" and it finds that payment's actual log lines across both services and explains what happened, instead of you reading two sets of logs by hand. Ask it "why did you choose the outbox pattern?" and it answers from this repository's own design documents rather than guessing. It reads the system, it never changes anything in it.
 
+## How it fits together
+
+Every moving part, and what talks to what.
+
+![PayLedger component diagram](assets/component-diagram.png)
+
 ## Running it
 
 All you need is Docker. Every database, Redis, Kafka and all three services come up together.
