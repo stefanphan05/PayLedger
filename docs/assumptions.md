@@ -35,6 +35,17 @@ What this project simplifies on purpose, so "what are the limits of your system?
 * The database is called `payment_db`, not `payments_db` as older docs said.
 * Logs are JSON in the containers and plain text when a service runs on the host. Two different readers, two different formats.
 * Prometheus scrapes both services over the compose network. The measurement endpoints need no login, which is only acceptable because they are not published to the host.
+* Three services now, not two. `insights-service` runs on host port 8000 and `insights-db` on 5434, since 5432 and 5433 are taken.
+## Insights
+* Ingestion is manual and rebuilds everything from scratch. Nothing triggers it on a new payment or an edited document.
+* The log corpus is a snapshot of one `docker compose logs` dump. It goes stale the moment the next payment happens, and the service cannot tell you that it has.
+* An answer is only as current as the last ingestion. A question about a payment made since then gets a confident answer about something else, or nothing.
+* Citations are the model's own `[n]` markers, read back out of the answer. Nothing verifies that the marked source actually supports the sentence, so a wrong citation looks exactly like a right one.
+* No login on `/insights/ask`, unlike every payments endpoint. Acceptable only because it is local and holds nothing sensitive.
+* The model that turns text into numbers stops reading after roughly 190 English words. Ten of the current 121 stored pieces exceed that and lose their tails; ingestion prints a warning for each.
+* Answers are written by a free tier, so what is sent may be used by the provider to improve its products and may be read by people there. Fine for invented demo payments, not for anything real.
+* Search is exact for anything that looks like an id, and meaning-based for everything else. An identifier made only of letters would not be recognised as one.
+* No index on the stored numbers. Every row is compared on every question, which is faster than an index at this size and stops being true somewhere near a million.
 ## Known gaps
 The things below are real bugs waiting to happen, not accepted trade offs.
 * **No currency validation.** A EUR payment creates EUR wallets even though no EUR funding account exists. Harmless today (it gets rejected for insufficient funds), but once deposits work you could have EUR owed to users with no EUR held. Fix: reject when no ASSET account exists for that currency.
@@ -52,5 +63,5 @@ FROM accounts GROUP BY currency;   -- every row must be 0
 ```
 
 ## Not started
-Resilience (08), concurrency hardening (11), insights service (13).
+Resilience (08) and concurrency hardening (11).
 Not assumptions, just work not begun.

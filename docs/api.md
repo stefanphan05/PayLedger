@@ -1,13 +1,19 @@
 # PayLedger API Reference
 
-The `payment-api-service` is the only service exposing an HTTP surface. `ledger-service`
-is internal and reachable only over Kafka, it has no endpoints.
+Two services expose HTTP. `payment-api-service` is the payments API and everything
+below describes it, up to [the insights endpoint](#post-insightsask) at the end.
+`ledger-service` is internal and reachable only over Kafka, it has no endpoints.
 
-- **Base URL (local):** `http://localhost:8080`
+| Service | Base URL (local) | Auth |
+|---|---|---|
+| `payment-api-service` | `http://localhost:8080` | JWT bearer token on every endpoint |
+| `insights-service` | `http://localhost:8000` | None |
+
 - **Content type:** `application/json` on requests; `application/json` on success and
   `application/problem+json` on errors.
-- **Auth:** stateless JWT bearer tokens. Every endpoint requires one except
-  `POST /auth/signup` and `POST /auth/login`.
+- **Auth:** stateless JWT bearer tokens on `payment-api-service`. Every endpoint requires
+  one except `POST /auth/signup` and `POST /auth/login`. `insights-service` has no
+  authentication at all, which is explained where that endpoint is documented.
 
 ## Authentication
 
@@ -349,6 +355,85 @@ curl -X PATCH http://localhost:8080/transactions/d41f0c88-.../status \
 
 **Errors:** `403 Forbidden` — `You are not allowed to do that` (caller is not an
 admin); `404 Transaction Not Found`; `409` on a concurrent-modification clash.
+
+---
+
+## `POST /insights/ask`
+
+Asks a question about PayLedger in plain English and gets an answer drawn from this
+project's own logs and design documents. Served by `insights-service` on
+**`http://localhost:8000`**, not the payments API.
+
+Two kinds of question work, and the service handles them differently under the hood
+(see [ADR-0017](decisions/0017-two-kinds-of-search-instead-of-one.md)):
+
+- **About one payment** — *"why did transaction demo-8 fail?"* Any correlation id or
+  transaction id in the question is looked up exactly, so the answer comes from that
+  payment's real log lines.
+- **About the system** — *"why optimistic locking instead of pessimistic?"* Answered from
+  the ADRs and architecture docs by searching on meaning rather than exact words.
+
+**No authentication.** Unlike every endpoint above, this one is open. There is nothing
+sensitive behind it, it is only reachable locally, and it holds no customer data — only
+this repository's own documents and whichever logs were last ingested. Exposing it beyond
+a laptop would need that revisited.
+
+**Request**
+
+| Field | Type | Constraints |
+|---|---|---|
+| `question` | string | required |
+
+```bash
+curl -X POST http://localhost:8000/insights/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"why did transaction demo-8 fail?"}'
+```
+
+**`200 OK`**
+
+```json
+{
+  "answer": "Transaction 913950cf-... was rejected by ledger-service with INSUFFICIENT_FUNDS [1]. The request was for 500000 AUD, which exceeded the sender's balance, so the ledger published PAYMENT_FAILED and the payment settled as FAILED [1].",
+  "cited_sources": [
+    {
+      "citation_number": 1,
+      "source_ref": "correlation id demo-8",
+      "source_type": "LOG"
+    }
+  ]
+}
+```
+
+`cited_sources` lists only the sources the answer actually referenced, matched from the
+`[n]` markers in the text. A source that was retrieved but not used does not appear.
+
+**Those citations are the model's own claim, not a guarantee.** Nothing verifies that the
+sentence marked `[1]` is really supported by source 1 — a wrong attribution looks exactly
+like a right one. Treat them as a pointer to check, not as proof. [ADR-0018](decisions/0018-a-free-model-writes-the-answers.md)
+covers why the guarantee is missing.
+
+**Nothing ingested yet**
+
+Returns `200`, not an error, because an empty corpus is a state rather than a fault:
+
+```json
+{ "answer": "Nothing has been ingested yet.", "cited_sources": [] }
+```
+
+Run the ingestion step and ask again — see
+[architecture/insights-retrieval.md](architecture/insights-retrieval.md).
+
+**Errors**
+
+| Status | When |
+|---|---|
+| 422 | `question` missing from the body |
+| 500 | `GEMINI_API_KEY` is not configured. The message names the file to put it in |
+| 500 | `insights-db` is unreachable, or the `chunks` table does not exist |
+
+Answers are only as current as the last ingestion, and the service cannot tell you when
+that was. If an answer about a recent payment looks wrong, check that first.
 
 ---
 
