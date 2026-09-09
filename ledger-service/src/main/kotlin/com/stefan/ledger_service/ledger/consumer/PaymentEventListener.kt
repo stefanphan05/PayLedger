@@ -5,8 +5,10 @@ import com.stefan.ledger_service.ledger.model.ProcessedEvent
 import com.stefan.ledger_service.ledger.repository.ProcessedEventRepository
 import com.stefan.ledger_service.ledger.service.LedgerOutcome
 import com.stefan.ledger_service.ledger.service.LedgerService
+import com.stefan.ledger_service.shared.observability.LogContext
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
@@ -22,8 +24,15 @@ class PaymentEventListener(
 
     @KafkaListener(topics = ["payment-events"])
     fun onPaymentEvent(record: ConsumerRecord<String, String>) {
-        val event = parseEvent(record)
+        MDC.putCloseable(LogContext.CORRELATION_ID, LogContext.of(record)).use {
+            val event = parseEvent(record)
+            MDC.putCloseable(LogContext.TRANSACTION_ID, event.transactionId.toString()).use {
+                process(event)
+            }
+        }
+    }
 
+    private fun process(event: PaymentEventEnvelope) {
         if (!isPaymentInitiated(event)) {
             ignoreEvent(event)
             return
