@@ -4,6 +4,7 @@ plugins {
 	id("org.springframework.boot") version "4.1.0"
 	id("io.spring.dependency-management") version "1.1.7"
 	kotlin("plugin.jpa") version "2.3.21"
+	jacoco
 }
 
 group = "com.stefan"
@@ -67,3 +68,17 @@ tasks.withType<Test> {
 }
 
 tasks.named<Jar>("jar") { enabled = false }
+
+tasks.test {
+	useJUnitPlatform()
+	finalizedBy(tasks.jacocoTestReport)   // report after every test run
+}
+
+tasks.jacocoTestReport {
+	dependsOn(tasks.test)
+	reports {
+		html.required = true
+		xml.required = true    // machine-readable, handy for grepping a number
+		csv.required = true
+	}
+}
