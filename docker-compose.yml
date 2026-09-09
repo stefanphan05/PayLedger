@@ -71,6 +71,49 @@ services:
       timeout: 3s
       retries: 15
 
+  insights-db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: insights_db
+      POSTGRES_USER: ${INSIGHTS_DB_USERNAME:-user}
+      POSTGRES_PASSWORD: ${INSIGHTS_DB_PASSWORD:-password}
+    ports: [ "5434:5432" ]
+    volumes:
+      - insights-data:/var/lib/postgresql/data
+      # Runs once, on first creation of the volume only.
+      - ./infra/insights-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${INSIGHTS_DB_USERNAME:-user} -d insights_db" ]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  insights:
+    build: ./insights-service
+    environment:
+      INSIGHTS_DB_URL: postgresql://${INSIGHTS_DB_USERNAME:-user}:${INSIGHTS_DB_PASSWORD:-password}@insights-db:5432/insights_db
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      # Absolute paths to the mounts below. The defaults in config.py are
+      # relative to the insights-service directory and mean nothing in here.
+      DOCS_ROOT: /corpus
+      LOG_FILE: /corpus/data/logs.jsonl
+    volumes:
+      # The corpus, read-only, so ingestion can also be run inside the
+      # container. Mounting at /corpus keeps source_ref values identical to a
+      # host-side ingest, because both resolve relative to the repository root.
+      - ./README.md:/corpus/README.md:ro
+      - ./docs:/corpus/docs:ro
+      - ./insights-service/data:/corpus/data:ro
+    ports: [ "8000:8000" ]
+    depends_on:
+      insights-db: { condition: service_healthy }
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"" ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
+
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
@@ -142,6 +185,7 @@ volumes:
   ledger-data:
   kafkadata:
   prometheus-data:
+  insights-data:
 
 
 
