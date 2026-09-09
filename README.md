@@ -32,16 +32,19 @@ docker compose exec insights python -m app.ingestion.ingestion_cli
 ```
 
 That second step is manual on purpose and has to be re-run to pick up new payments — see
-[insights-retrieval.md](docs/architecture/insights-retrieval.md). Everything else works
+[insights-retrieval.md](docs/insights-retrieval.md). Everything else works
 without it; only `/insights/ask` depends on it.
 
 ## Documentation
 
 - [API reference](docs/api.md) — every HTTP endpoint across both public services
 - [Decisions](docs/decisions) — numbered ADRs across all three services
-- [Payment lifecycle](docs/architecture/payment-lifecycle.md) — what moves, and in what order
-- [Observability](docs/architecture/observability.md) — finding one payment across both services
-- [Insights retrieval](docs/architecture/insights-retrieval.md) — how a plain English question becomes an answer
+- [System design](docs/architecture.md) — the diagrams, and what each service does
+- [Databases](docs/database.md) — what is stored, where, and which constraints matter
+- [Testing](docs/testing.md) — what is tested, how to run it, and what is not covered
+- [Failure modes](docs/failure-modes.md) — what breaks when each piece goes down
+- [Observability](docs/observability.md) — finding one payment across both services
+- [Insights retrieval](docs/insights-retrieval.md) — how a plain English question becomes an answer
 - [Assumptions](docs/assumptions.md) — what this project simplifies on purpose
 
 ## Tech Stack & Architecture Roles

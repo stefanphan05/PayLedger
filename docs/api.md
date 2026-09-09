@@ -1,62 +1,46 @@
 # PayLedger API Reference
 
-Two services expose HTTP. `payment-api-service` is the payments API and everything
-below describes it, up to [the insights endpoint](#post-insightsask) at the end.
-`ledger-service` is internal and reachable only over Kafka, it has no endpoints.
+Two services expose HTTP. 
 
 | Service | Base URL (local) | Auth |
 |---|---|---|
 | `payment-api-service` | `http://localhost:8080` | JWT bearer token on every endpoint |
 | `insights-service` | `http://localhost:8000` | None |
 
-- **Content type:** `application/json` on requests; `application/json` on success and
-  `application/problem+json` on errors.
-- **Auth:** stateless JWT bearer tokens on `payment-api-service`. Every endpoint requires
-  one except `POST /auth/signup` and `POST /auth/login`. `insights-service` has no
-  authentication at all, which is explained where that endpoint is documented.
+- **Content type:** `application/json` on requests; `application/json` on success and `application/problem+json` on errors.
+- **Auth:** stateless JWT bearer tokens on `payment-api-service`. Every endpoint requires one except `POST /auth/signup` and `POST /auth/login`. `insights-service` has no authentication at all, which is explained where that endpoint is documented.
 
 ## Authentication
 
-Obtain a token from `POST /auth/login`, then send it on every subsequent call:
+Obtain a token from `POST /auth/login`, then send it on every other call:
 
 ```
 Authorization: Bearer <token>
 ```
 
-The prefix is matched case-insensitively. Tokens are HMAC-signed and expire after
-1 hour (`jwt.expiration-ms`); `expiresIn` on the login response reports the lifetime
-in **seconds**. There is no refresh endpoint, log in again when the token expires.
+The prefix is matched case-insensitively. Tokens are HMAC-signed and expire after 1 hour (`jwt.expiration-ms`); `expiresIn` on the login response reports the lifetime in **seconds**. There is no refresh endpoint, log in again when the token expires.
 
 A missing, malformed, expired, or unknown-user token leaves the request
-unauthenticated, which the security entry point renders as `401 Unauthorized`. It is
-never a distinct error, the API does not tell a client *why* a token was rejected.
+unauthenticated, which the security entry point renders as `401 Unauthorized`. It is never a distinct error, the API does not tell a client *why* a token was rejected.
 
 ## Correlation IDs
 
-Every request is tagged with an id that follows the payment through both services,
-including the asynchronous ledger round trip. Send your own:
+Every request is tagged with an id that follows the payment through both services, including the asynchronous ledger round trip. Send your own:
 
 ```
 X-Correlation-Id: <id>
 ```
 
-It is optional. When absent — or when the supplied value is rejected — the service
-generates one. Either way the id comes back on the response under the same header
-name, so a client can quote it when reporting a problem.
+It is optional. When absent, or when the supplied value is rejected, the service generates one. Either way the id comes back on the response under the same header name, so a client can quote it when reporting a problem.
 
 An accepted id is 1–64 characters of letters, digits, `-` and `_`. Anything outside
-that (whitespace, punctuation, newlines, or an over-long value) is **replaced with a
-generated id rather than rejected** — a bad correlation id never fails a request. The
-constraint exists because the value is written to logs and to a database column.
+that (whitespace, punctuation, newlines, or an over-long value) is **replaced with a generated id rather than rejected**, a bad correlation id never fails a request. The constraint exists because the value is written to logs and to a database column.
 
-Given an id, `docker compose logs | grep <id>` returns every log line both services
-produced for that payment, in order. See
-[architecture/observability.md](architecture/observability.md).
+Given an id, `docker compose logs | grep <id>` returns every log line both services produced for that payment, in order. See [observability.md](observability.md).
 
 ## Error format
 
-All errors are RFC 7807 `ProblemDetail` responses. Unhandled faults and `401`s also
-carry a `correlationId` property, which is the id to quote when reporting them:
+All errors are RFC 7807 `ProblemDetail` responses. Unhandled faults and `401`s also carry a `correlationId` property, which is the id to quote when reporting them:
 
 ```json
 {
@@ -69,8 +53,7 @@ carry a `correlationId` property, which is the id to quote when reporting them:
 ```
 
 Validation failures add an `errors` object mapping each rejected field to its
-messages. The same shape is used for body validation, malformed JSON, and bad
-headers, so a client only ever parses one format:
+messages. The same shape is used for body validation, malformed JSON, and bad headers, so a client only ever parses one format:
 
 ```json
 {
@@ -98,8 +81,7 @@ headers, so a client only ever parses one format:
 
 ## `POST /auth/signup`
 
-Registers a user. Public. New users always receive the `USER` role; `ADMIN` is granted
-out-of-band (there is no endpoint for it).
+Registers a user. Public. New users always receive the `USER` role; `ADMIN` is granted out-of-band (there is no endpoint for it).
 
 **Request**
 
@@ -153,16 +135,13 @@ curl -X POST http://localhost:8080/auth/login \
 { "token": "eyJhbGciOi...", "tokenType": "Bearer", "expiresIn": 3600 }
 ```
 
-**Errors:** `401 Unauthorized` — `Invalid email or password`. Deliberately identical
-for an unknown email and a wrong password, so the endpoint cannot be used to
-enumerate registered accounts.
+**Errors:** `401 Unauthorized` — `Invalid email or password`. Deliberately identical for an unknown email and a wrong password, so the endpoint cannot be used to enumerate registered accounts.
 
 ---
 
 ## `GET /auth/me`
 
-Returns the authenticated user, including roles — the only way for a client to learn
-whether it may call the admin endpoint.
+Returns the authenticated user, including roles — the only way for a client to learn whether it may call the admin endpoint.
 
 ```bash
 curl http://localhost:8080/auth/me -H "Authorization: Bearer $TOKEN"
@@ -185,13 +164,10 @@ curl http://localhost:8080/auth/me -H "Authorization: Bearer $TOKEN"
 
 ## `POST /transactions`
 
-Creates a payment from the authenticated user to `recipientId`. The sender is always
-taken from the token — it cannot be set in the body.
+Creates a payment from the authenticated user to `recipientId`. The sender is always taken from the token — it cannot be set in the body.
 
 This endpoint returns **before the money moves**. It records the intent, returns
-`PENDING`, and publishes an event through the transactional outbox (ADR-0004);
-`ledger-service` performs the double-entry posting asynchronously and the status
-later becomes `COMPLETED` or `FAILED`. Poll `GET /transactions/{id}` for the outcome.
+`PENDING`, and publishes an event through the transactional outbox (ADR-0004); `ledger-service` performs the double-entry posting asynchronously and the status later becomes `COMPLETED` or `FAILED`. Poll `GET /transactions/{id}` for the outcome.
 
 **Headers**
 
@@ -207,7 +183,7 @@ later becomes `COMPLETED` or `FAILED`. Poll `GET /transactions/{id}` for the out
 | `currencyCode` | string | required, 3 uppercase letters (ISO 4217) |
 | `recipientId` | UUID | required, must exist, must not be the sender |
 
-There is no user-lookup endpoint — the caller must already hold the recipient's UUID.
+There is no user-lookup endpoint, the caller must already hold the recipient's UUID.
 
 ```bash
 curl -X POST http://localhost:8080/transactions \
@@ -235,28 +211,18 @@ curl -X POST http://localhost:8080/transactions \
 `amount` is serialised as a **JSON string** to avoid float rounding; parse it with a
 decimal type, not a double.
 
-`failureReason` is `null` unless `status` is `FAILED`, and is free text — treat it as a
-message to show, not a code to branch on. Today `ledger-service` sends
+`failureReason` is `null` unless `status` is `FAILED`, and is free text — treat it as a message to show, not a code to branch on. Today `ledger-service` sends
 `INSUFFICIENT_FUNDS`, `CURRENCY_MISMATCH` or `SELF_TRANSFER`, and may add more.
 
 ### Idempotency
 
 Retrying with the same key replays the original outcome for **24 hours**
-(`idempotency.ttl`) instead of creating a second payment. A replayed success carries
-`Idempotent-Replay: true`; a replayed rejection is byte-identical to the first one,
-because errors are rendered by the exception handler, which sets no headers. The
-header is informational, the outcome is the same either way.
+(`idempotency.ttl`) instead of creating a second payment. A replayed success carries `Idempotent-Replay: true`; a replayed rejection is byte-identical to the first one, because errors are rendered by the exception handler, which sets no headers. The header is informational, the outcome is the same either way.
 
-The key is bound to the body it was first used with, compared on a canonical form, so
-`"50.00"` and `"50.0"` count as the same request. **A client that corrects a rejected
-request and retries with the same key gets 422, not a fresh attempt, a corrected
-request needs a new key.**
+The key is bound to the body it was first used with, compared on a canonical form, so `"50.00"` and `"50.0"` count as the same request. **A client that corrects a rejected request and retries with the same key gets 422, not a fresh attempt, a corrected request needs a new key.**
 
-When a request fails ambiguously (a connection drop at commit time, where the write
-may or may not have landed), the key is held for 60 seconds
-(`idempotency.ambiguous-failure-hold`) and retries get `409` during that window. This
-is deliberate: releasing the key would let a retry create a duplicate payment. Wait
-out the hold and retry with the same key.
+When a request fails ambiguously (a connection drop at commit time, where the write may or may not have landed), the key is held for 60 seconds
+(`idempotency.ambiguous-failure-hold`) and retries get `409` during that window. This is deliberate: releasing the key would let a retry create a duplicate payment. Wait out the hold and retry with the same key.
 
 See `docs/decisions/0002-redis-backed-idempotency-keys.md` for the design.
 
@@ -276,11 +242,9 @@ See `docs/decisions/0002-redis-backed-idempotency-keys.md` for the design.
 
 ## `GET /transactions/{transactionId}`
 
-Fetches one transaction. A regular user may read a transaction only if they are the
-sender or the recipient; an `ADMIN` may read any.
+Fetches one transaction. A regular user may read a transaction only if they are the sender or the recipient; an `ADMIN` may read any.
 
-An unauthorised transaction returns `404`, not `403`, the API does not confirm that
-a transaction exists to someone who is not a party to it.
+An unauthorised transaction returns `404`, not `403`, the API does not confirm that a transaction exists to someone who is not a party to it.
 
 ```bash
 curl http://localhost:8080/transactions/d41f0c88-... -H "Authorization: Bearer $TOKEN"
@@ -289,12 +253,9 @@ curl http://localhost:8080/transactions/d41f0c88-... -H "Authorization: Bearer $
 **`200 OK`** — same shape as the create response.
 
 This is the endpoint to poll for the outcome. A payment is created `PENDING` and
-usually settles within a few seconds, once `ledger-service` has posted it and the
-verdict has travelled back. `COMPLETED` and `FAILED` are final — nothing moves a
-transaction out of them.
+usually settles within a few seconds, once `ledger-service` has posted it and the verdict has travelled back. `COMPLETED` and `FAILED` are final — nothing moves a transaction out of them.
 
-**Errors:** `404 Transaction Not Found` — `Transaction with id <id> was not found`
-(also returned when the caller is not a party to it).
+**Errors:** `404 Transaction Not Found` — `Transaction with id <id> was not found` (also returned when the caller is not a party to it).
 
 ---
 
@@ -334,8 +295,7 @@ curl "http://localhost:8080/transactions?page=0&size=20&sort=createdAt,desc" \
 
 Forces a transaction into a given status. **Requires the `ADMIN` role.**
 
-This is an operational override, not the normal path — statuses are meant to be set
-by `ledger-service` through the event pipeline. It publishes a
+This is an operational override, not the normal path — statuses are meant to be set by `ledger-service` through the event pipeline. It publishes a
 `PAYMENT_STATUS_CHANGED` event like any other update.
 
 **Request**
@@ -360,23 +320,14 @@ admin); `404 Transaction Not Found`; `409` on a concurrent-modification clash.
 
 ## `POST /insights/ask`
 
-Asks a question about PayLedger in plain English and gets an answer drawn from this
-project's own logs and design documents. Served by `insights-service` on
-**`http://localhost:8000`**, not the payments API.
+Asks a question about PayLedger in plain English and gets an answer drawn from this project's own logs and design documents. Served by `insights-service` on **`http://localhost:8000`**, not the payments API.
 
-Two kinds of question work, and the service handles them differently under the hood
-(see [ADR-0017](decisions/0017-two-kinds-of-search-instead-of-one.md)):
+Two kinds of question work, and the service handles them differently under the hood (see [ADR-0017](decisions/0017-two-kinds-of-search-instead-of-one.md)):
 
-- **About one payment** — *"why did transaction demo-8 fail?"* Any correlation id or
-  transaction id in the question is looked up exactly, so the answer comes from that
-  payment's real log lines.
-- **About the system** — *"why optimistic locking instead of pessimistic?"* Answered from
-  the ADRs and architecture docs by searching on meaning rather than exact words.
+- **About one payment** — *"why did transaction demo-8 fail?"* Any correlation id or transaction id in the question is looked up exactly, so the answer comes from that payment's real log lines.
+- **About the system** — *"why optimistic locking instead of pessimistic?"* Answered from the ADRs and architecture docs by searching on meaning rather than exact words.
 
-**No authentication.** Unlike every endpoint above, this one is open. There is nothing
-sensitive behind it, it is only reachable locally, and it holds no customer data — only
-this repository's own documents and whichever logs were last ingested. Exposing it beyond
-a laptop would need that revisited.
+**No authentication.** Unlike every endpoint above, this one is open. There is nothing sensitive behind it, it is only reachable locally, and it holds no customer data, only this repository's own documents and whichever logs were last ingested. Exposing it beyond a laptop would need that revisited.
 
 **Request**
 
@@ -405,13 +356,9 @@ curl -X POST http://localhost:8000/insights/ask \
 }
 ```
 
-`cited_sources` lists only the sources the answer actually referenced, matched from the
-`[n]` markers in the text. A source that was retrieved but not used does not appear.
+`cited_sources` lists only the sources the answer actually referenced, matched from the `[n]` markers in the text. A source that was retrieved but not used does not appear.
 
-**Those citations are the model's own claim, not a guarantee.** Nothing verifies that the
-sentence marked `[1]` is really supported by source 1 — a wrong attribution looks exactly
-like a right one. Treat them as a pointer to check, not as proof. [ADR-0018](decisions/0018-a-free-model-writes-the-answers.md)
-covers why the guarantee is missing.
+**Those citations are the model's own claim, not a guarantee.** Nothing verifies that the sentence marked `[1]` is really supported by source 1 — a wrong attribution looks exactly like a right one. Treat them as a pointer to check, not as proof. [ADR-0018](decisions/0018-a-free-model-writes-the-answers.md) covers why the guarantee is missing.
 
 **Nothing ingested yet**
 
@@ -422,7 +369,7 @@ Returns `200`, not an error, because an empty corpus is a state rather than a fa
 ```
 
 Run the ingestion step and ask again — see
-[architecture/insights-retrieval.md](architecture/insights-retrieval.md).
+[insights-retrieval.md](insights-retrieval.md).
 
 **Errors**
 
