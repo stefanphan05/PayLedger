@@ -2,10 +2,13 @@ package com.stefan.payment_api_service.outbox.service
 
 import com.stefan.payment_api_service.outbox.config.PaymentEventProperties
 import com.stefan.payment_api_service.outbox.repository.OutboxEventRepository
+import com.stefan.payment_api_service.shared.observability.LogContext
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
@@ -41,11 +44,25 @@ class OutboxPublisher(
 
         val sentAt = Instant.now()
         events.forEach { event ->
+            val record = ProducerRecord(
+                properties.topic,
+                event.transactionId.toString(),
+                event.payload,
+            )
+
+            // A header, not an envelope field: the id is how we deliver and trace the
+            // message, not part of what the message means. Keeps the contract fixture
+            // in ADR-0010 unchanged.
+            record.headers().add(
+                LogContext.HEADER,
+                event.correlationId.toByteArray(StandardCharsets.UTF_8),
+            )
+
             // .get() and not fire-and-forget: we have to know the broker ACCEPTED the
             // record before marking the row published. Marking it optimistically is
             // the lost event all over again, one table further along.
             kafkaTemplate
-                .send(properties.topic, event.transactionId.toString(), event.payload)
+                .send(record)
                 .get(properties.sendTimeout.toMillis(), TimeUnit.MILLISECONDS)
 
             event.publishedAt = sentAt

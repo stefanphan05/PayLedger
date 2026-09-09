@@ -5,6 +5,7 @@ import com.stefan.payment_api_service.outbox.model.OutboxEvent
 import com.stefan.payment_api_service.transaction.model.Transaction
 import com.stefan.payment_api_service.outbox.model.PaymentEventType
 import com.stefan.payment_api_service.outbox.repository.OutboxEventRepository
+import com.stefan.payment_api_service.shared.observability.LogContext
 import org.springframework.stereotype.Service
 import tools.jackson.databind.json.JsonMapper
 
@@ -34,6 +35,7 @@ class PaymentEventPublisher(
                 transactionId = transaction.id,
                 eventType = eventType,
                 payload = jsonMapper.writeValueAsString(envelope),
+                correlationId = LogContext.current() ?: transaction.id.toString()
             )
         )
     }

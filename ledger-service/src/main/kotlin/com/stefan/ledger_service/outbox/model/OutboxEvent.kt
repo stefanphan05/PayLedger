@@ -25,6 +25,14 @@ class OutboxEvent(
     @Column(name = "payload", nullable = false, updatable = false)
     val payload: String,
 
+    /**
+     * The flow that produced this event. Copied onto the Kafka record as a header, so
+     * one log search spans both services. Deliberately not part of the event contract -
+     * see ADR-0011.
+     */
+    @Column(name = "correlation_id", nullable = false, length = 64, updatable = false)
+    val correlationId: String,
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false, updatable = false)

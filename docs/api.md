@@ -25,9 +25,32 @@ A missing, malformed, expired, or unknown-user token leaves the request
 unauthenticated, which the security entry point renders as `401 Unauthorized`. It is
 never a distinct error, the API does not tell a client *why* a token was rejected.
 
+## Correlation IDs
+
+Every request is tagged with an id that follows the payment through both services,
+including the asynchronous ledger round trip. Send your own:
+
+```
+X-Correlation-Id: <id>
+```
+
+It is optional. When absent — or when the supplied value is rejected — the service
+generates one. Either way the id comes back on the response under the same header
+name, so a client can quote it when reporting a problem.
+
+An accepted id is 1–64 characters of letters, digits, `-` and `_`. Anything outside
+that (whitespace, punctuation, newlines, or an over-long value) is **replaced with a
+generated id rather than rejected** — a bad correlation id never fails a request. The
+constraint exists because the value is written to logs and to a database column.
+
+Given an id, `docker compose logs | grep <id>` returns every log line both services
+produced for that payment, in order. See
+[architecture/observability.md](architecture/observability.md).
+
 ## Error format
 
-All errors are RFC 7807 `ProblemDetail` responses:
+All errors are RFC 7807 `ProblemDetail` responses. Unhandled faults and `401`s also
+carry a `correlationId` property, which is the id to quote when reporting them:
 
 ```json
 {

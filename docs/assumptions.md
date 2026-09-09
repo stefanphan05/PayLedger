@@ -31,12 +31,15 @@ What this project simplifies on purpose, so "what are the limits of your system?
 ## Infrastructure
 * Single node everything. One Postgres per service, one Kafka broker with replication factor 1, one Redis.
 * Local development only. The root `.env` holds throwaway credentials.
-* Both services run on the host, not in compose. That is why `ledger-db` uses port 5433.
+* Everything runs in compose, both services included. `ledger-db` still uses host port 5433 because `payments-db` has 5432.
 * The database is called `payment_db`, not `payments_db` as older docs said.
+* Logs are JSON in the containers and plain text when a service runs on the host. Two different readers, two different formats.
+* Prometheus scrapes both services over the compose network. The measurement endpoints need no login, which is only acceptable because they are not published to the host.
 ## Known gaps
-Two things below are real bugs waiting to happen, not accepted trade offs.
+The things below are real bugs waiting to happen, not accepted trade offs.
 * **No currency validation.** A EUR payment creates EUR wallets even though no EUR funding account exists. Harmless today (it gets rejected for insufficient funds), but once deposits work you could have EUR owed to users with no EUR held. Fix: reject when no ASSET account exists for that currency.
 * **No error handler.** A message that cannot be read is retried ten times and then dropped, with nothing kept to look at afterwards. Fix is a dead letter topic in feature 08.
+* **Retries and drops carry no correlation id.** Those lines come from the messaging framework, outside our code, so they are the only part of a payment's history that a log search will not find. Same fix, feature 08.
 ## Health check
 
 Balances must reconcile per currency. Summing across currencies adds AUD to USD and means nothing.
@@ -49,5 +52,5 @@ FROM accounts GROUP BY currency;   -- every row must be 0
 ```
 
 ## Not started
-Resilience (08), observability (10), concurrency hardening (11), insights service (13).
+Resilience (08), concurrency hardening (11), insights service (13).
 Not assumptions, just work not begun.

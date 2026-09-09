@@ -1,5 +1,6 @@
 package com.stefan.payment_api_service.shared.security
 
+import com.stefan.payment_api_service.shared.observability.LogContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpStatus
@@ -37,6 +38,7 @@ class SecurityConfig {
                 "Authentication required"
             )
 
+            problem.setProperty("correlationId", LogContext.current())
             problem.title = "Unauthorized"
             problem.instance = URI.create(request.requestURI)
 
@@ -61,6 +63,9 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it.requestMatchers("/auth/signup", "/auth/login").permitAll()
+                    // Read-only and internal. Not published to the host in compose -
+                    // Prometheus reaches them over the container network.
+                    .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
                     .anyRequest().authenticated()
             }
             .exceptionHandling { it.authenticationEntryPoint(authenticationEntryPoint) }

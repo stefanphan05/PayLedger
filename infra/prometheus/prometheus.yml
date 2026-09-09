@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: payledger
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # Service names, not localhost: Prometheus is a container on this network.
+      # ledger publishes no host port and does not need one to be scraped.
+      - targets: ["payment-api:8080", "ledger:8080"]

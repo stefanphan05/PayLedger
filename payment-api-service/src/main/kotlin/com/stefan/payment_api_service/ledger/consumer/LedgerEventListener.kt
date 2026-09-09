@@ -3,10 +3,12 @@ package com.stefan.payment_api_service.ledger.consumer
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
 import com.stefan.payment_api_service.ledger.model.LedgerEventEnvelope
 import com.stefan.payment_api_service.ledger.repository.ProcessedEventRepository
+import com.stefan.payment_api_service.shared.observability.LogContext
 import com.stefan.payment_api_service.transaction.model.TransactionStatus
 import com.stefan.payment_api_service.transaction.service.TransactionService
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
@@ -22,6 +24,12 @@ class LedgerEventListener(
 
     @KafkaListener(topics = ["\${ledger-events.topic}"])
     fun onLedgerEvent(record: ConsumerRecord<String, String>) {
+        MDC.putCloseable(LogContext.CORRELATION_ID, LogContext.of(record)).use {
+            handle(record)
+        }
+    }
+
+    private fun handle(record: ConsumerRecord<String, String>) {
         val event = parseEvent(record)
 
         // Only care about PAYMENT_COMPLETED or PAYMENT_FAILED, ignore everything else

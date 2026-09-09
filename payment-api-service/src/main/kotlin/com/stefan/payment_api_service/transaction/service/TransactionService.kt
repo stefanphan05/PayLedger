@@ -8,12 +8,14 @@ import com.stefan.payment_api_service.ledger.model.LedgerEventEnvelope
 import com.stefan.payment_api_service.ledger.repository.ProcessedEventRepository
 import com.stefan.payment_api_service.outbox.service.PaymentEventPublisher
 import com.stefan.payment_api_service.outbox.model.PaymentEventType
+import com.stefan.payment_api_service.shared.observability.LogContext
 import com.stefan.payment_api_service.shared.security.UserSecurity
 import com.stefan.payment_api_service.transaction.model.Transaction
 import com.stefan.payment_api_service.transaction.repository.TransactionRepository
 import com.stefan.payment_api_service.transaction.model.TransactionRequestDTO
 import com.stefan.payment_api_service.transaction.model.TransactionStatus
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import java.util.UUID
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -57,9 +59,23 @@ class TransactionService(
             recipientId = transactionRequestDTO.recipientId,
         )
 
-        val savedTransaction = repository.saveAndFlush(transaction)
-        paymentEventPublisher.publish(PaymentEventType.PAYMENT_INITIATED, savedTransaction)
-        return savedTransaction
+        MDC.putCloseable(LogContext.TRANSACTION_ID, transaction.id.toString()).use {
+            val savedTransaction = repository.saveAndFlush(transaction)
+            paymentEventPublisher.publish(PaymentEventType.PAYMENT_INITIATED, savedTransaction)
+
+            // One of the two lines this service says about a payment that goes well.
+            // Without it a successful payment passes through here in silence, and the
+            // log search that is supposed to span both services starts at the ledger.
+            logger.info(
+                "Accepted {} {} from {} to {}",
+                savedTransaction.amount,
+                savedTransaction.currency,
+                senderId,
+                savedTransaction.recipientId,
+            )
+
+            return savedTransaction
+        }
     }
 
     fun getTransactionForRequester(id : UUID, requester: UserSecurity): Transaction {
@@ -92,22 +108,29 @@ class TransactionService(
 
     @Transactional
     fun settle(event: LedgerEventEnvelope, status: TransactionStatus): Transaction {
-        processedEvents.record(event.eventId, event.transactionId)
+        MDC.putCloseable(LogContext.TRANSACTION_ID, event.transactionId.toString()).use {
+            processedEvents.record(event.eventId, event.transactionId)
 
-        val transaction = getTransactionById(event.transactionId)
+            val transaction = getTransactionById(event.transactionId)
 
-        if (transaction.transactionStatus != TransactionStatus.PENDING) {
-            logger.warn(
-                "Ledger verdict {} overwrites {} on transaction {}",
-                status, transaction.transactionStatus, transaction.id,
-            )
+            if (transaction.transactionStatus != TransactionStatus.PENDING) {
+                logger.warn(
+                    "Ledger verdict {} overwrites {} on transaction {}",
+                    status, transaction.transactionStatus, transaction.id,
+                )
+            }
+
+            transaction.transactionStatus = status
+
+            transaction.failureReason = event.payload.reason
+            val savedTransaction = repository.save(transaction)
+            paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
+
+            // The other one: the ledger has told us how the payment ended, and this is
+            // where the round trip closes.
+            logger.info("Settled as {}", status)
+
+            return savedTransaction
         }
-
-        transaction.transactionStatus = status
-
-        transaction.failureReason = event.payload.reason
-        val savedTransaction = repository.save(transaction)
-        paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
-        return savedTransaction
     }
 }
