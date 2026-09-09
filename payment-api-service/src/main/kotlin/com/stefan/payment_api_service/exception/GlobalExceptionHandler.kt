@@ -9,6 +9,7 @@ import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundExc
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
 import com.stefan.payment_api_service.idempotency.service.IdempotencyService.Companion.HEADER_IDEMPOTENCY_KEY
+import com.stefan.payment_api_service.shared.observability.LogContext
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
@@ -126,10 +127,16 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
     @ExceptionHandler(Exception::class)
     fun handleUnexpectedException(e: Exception): ProblemDetail {
         logger.error("Unhandled exception", e)
-        return ProblemDetail.forStatusAndDetail(
+
+        val problem = ProblemDetail.forStatusAndDetail(
             HttpStatus.INTERNAL_SERVER_ERROR,
             "An unexpected error occurred"
         )
+        problem.setProperty(
+            "correlationId",
+            LogContext.current()
+        )
+        return problem
     }
 
     @ExceptionHandler(AuthenticationException::class)

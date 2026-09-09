@@ -1,5 +1,6 @@
 package com.stefan.payment_api_service.shared.security
 
+import com.stefan.payment_api_service.shared.observability.LogContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpStatus
@@ -37,6 +38,7 @@ class SecurityConfig {
                 "Authentication required"
             )
 
+            problem.setProperty("correlationId", LogContext.current())
             problem.title = "Unauthorized"
             problem.instance = URI.create(request.requestURI)
 
