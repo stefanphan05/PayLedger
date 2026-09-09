@@ -41,3 +41,14 @@ ledger-events:
   poll-interval: 1s
   batch-size: 100
   send-timeout: 5s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Defaults to health only. The scrape endpoint has to be named explicitly.
+        include: health,info,prometheus
+  metrics:
+    tags:
+      # Stamped on every metric, so one Prometheus query can tell the services apart.
+      application: ${spring.application.name}

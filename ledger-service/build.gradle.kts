@@ -32,7 +32,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-jackson")
 
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
-	implementation("org.springframework.boot:spring-boot-starter-micrometer-metrics")
+	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("io.micrometer:micrometer-registry-prometheus")
 
 	runtimeOnly("org.postgresql:postgresql")

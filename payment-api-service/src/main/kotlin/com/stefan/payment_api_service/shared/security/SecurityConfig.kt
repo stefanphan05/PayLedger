@@ -63,6 +63,9 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it.requestMatchers("/auth/signup", "/auth/login").permitAll()
+                    // Read-only and internal. Not published to the host in compose -
+                    // Prometheus reaches them over the container network.
+                    .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
                     .anyRequest().authenticated()
             }
             .exceptionHandling { it.authenticationEntryPoint(authenticationEntryPoint) }

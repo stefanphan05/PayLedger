@@ -17,4 +17,8 @@ interface OutboxEventRepository: JpaRepository<OutboxEvent, Long> {
         nativeQuery = true
     )
     fun lockUnpublishedBatch(@Param("limit") limit: Int): List<OutboxEvent>
+
+    fun countByPublishedAtIsNull(): Long
+
+    fun findFirstByPublishedAtIsNullOrderByIdAsc(): OutboxEvent?
 }
