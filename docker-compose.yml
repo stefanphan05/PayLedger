@@ -1,4 +1,32 @@
 services:
+  payment-api:
+    build: ./payment-api-service
+    environment:
+      PAYMENT_DB_URL: jdbc:postgresql://payments-db:5432/payment_db
+      PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME:-user}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-password}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+
+    ports: [ "8080:8080" ]
+    depends_on:
+      payments-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  ledger:
+    build: ./ledger-service
+    environment:
+      LEDGER_DB_URL: jdbc:postgresql://ledger-db:5432/ledger_db
+      LEDGER_DB_USERNAME: ${LEDGER_DB_USERNAME:-user}
+      LEDGER_DB_PASSWORD: ${LEDGER_DB_PASSWORD:-password}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    # No ports. ledger-service has no public API
+    depends_on:
+      ledger-db: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
   payments-db:
     image: postgres:16-alpine
     environment:
@@ -46,18 +74,23 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
 
-      # Two ports, only one of which you ever connect to:
-      #   9092 - the broker. This is the one.
+      # Three ports, because there are two kinds of client:
+      #  29092 - for the services, which run inside this network. Not published.
+      #   9092 - for anything on your machine: ./gradlew bootRun, the Kafka CLI.
       #   9093 - the KRaft controller quorum. Kafka 4 has no ZooKeeper, so the broker
       #          runs an internal controller for cluster metadata. Nothing outside the
       #          container ever talks to it, which is why it is not published below.
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_LISTENERS: PLAINTEXT://:29092,PLAINTEXT_HOST://:9092,CONTROLLER://:9093
 
-      # What the broker tells clients to connect to. It must be reachable FROM the
-      # client, and our only client is the app on the host, so: localhost:9092.
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # A client's first request is "where do I connect?", and the broker answers with
+      # whatever is listed here for the port the client arrived on. The answer has to
+      # work from where that client is standing, and "localhost" is a different machine
+      # depending on where you ask - inside the network it is the caller's own
+      # container. So each entry point gets its own answer, and one address cannot
+      # serve both.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
 
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT

@@ -7,6 +7,18 @@ PayLedger is a miniature payment system designed like real-world fintech platfor
 ### ledger-service
 `ledger-service` acts as the private back-office accountant that never talks to the outside internet. It picks up that message, checks if the sender actually has enough funds, moves the balance using proper double-entry bookkeeping by taking that $15 from one account and adding $15 to the other. Once the money is safely moved, it sends a note back so the front door can officially flip the transaction status from "PENDING" to "COMPLETED".
 
+## Running it
+
+All you need is Docker. Both databases, Redis, Kafka and both services come up together.
+
+```bash
+git clone <repo-url> && cd payledger
+cp .env.example .env
+docker compose up --build
+```
+
+The API is then on `http://localhost:8080`. To stop everything: `docker compose down`.
+
 ## Documentation
 
 - [API reference](docs/api.md) — every endpoint on `payment-api-service`
