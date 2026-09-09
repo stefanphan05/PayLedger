@@ -10,6 +10,7 @@ import com.stefan.payment_api_service.outbox.service.PaymentEventPublisher
 import com.stefan.payment_api_service.transaction.model.TransactionRequestDTO
 import com.stefan.payment_api_service.transaction.repository.TransactionRepository
 import com.stefan.payment_api_service.transaction.service.TransactionService
+import org.apache.kafka.clients.producer.ProducerRecord
 import java.math.BigDecimal
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -120,7 +121,9 @@ class OutboxAtomicityTests @Autowired constructor(
         val refused = CompletableFuture.failedFuture<SendResult<String, String>>(
             RuntimeException("broker down"),
         )
-        whenever(kafkaTemplate.send(any(), any(), any())).thenReturn(delivered, refused)
+
+        whenever(kafkaTemplate.send(any<ProducerRecord<String, String>>()))
+            .thenReturn(delivered, refused)
 
         assertThrows<Exception> { outboxPublisher.publishBatch() }
 
@@ -139,6 +142,7 @@ class OutboxAtomicityTests @Autowired constructor(
         transactionId = UUID.randomUUID(),
         eventType = PaymentEventType.PAYMENT_INITIATED,
         payload = """{"eventId":"${UUID.randomUUID()}","eventType":"PAYMENT_INITIATED"}""",
+        correlationId = UUID.randomUUID().toString(),
     )
 
     private fun mockUser(email: String) = User(

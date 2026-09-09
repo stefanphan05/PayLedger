@@ -5,6 +5,8 @@ import com.stefan.payment_api_service.outbox.model.OutboxEvent
 import com.stefan.payment_api_service.outbox.model.PaymentEventType
 import com.stefan.payment_api_service.outbox.repository.OutboxEventRepository
 import com.stefan.payment_api_service.outbox.service.OutboxPublisher
+import com.stefan.payment_api_service.shared.observability.LogContext
+import org.apache.kafka.clients.producer.ProducerRecord
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
@@ -51,22 +53,26 @@ class OutboxPublisherTests {
     }
 
     @Test
-    fun `each record is keyed by the transaction id`() {
+    fun `each record is keyed by the transaction id and carries the correlation id`() {
         val event = outboxEvent()
         givenUnpublished(event)
         givenSendSucceeds()
 
         publisher.publishBatch()
 
-        val topic = argumentCaptor<String>()
-        val key = argumentCaptor<String>()
-        val value = argumentCaptor<String>()
-        verify(kafkaTemplate).send(topic.capture(), key.capture(), value.capture())
+        val record = argumentCaptor<ProducerRecord<String, String>>()
+        verify(kafkaTemplate).send(record.capture())
 
-        assertEquals(properties.topic, topic.firstValue)
+        assertEquals(properties.topic, record.firstValue.topic())
         // The key is what keeps a transaction's events on one partition, and therefore
         // in order for the consumer.
-        assertEquals(event.transactionId.toString(), key.firstValue)
+        assertEquals(event.transactionId.toString(), record.firstValue.key())
+        // A header, not a payload field. This is the assertion that keeps the shared
+        // example message in ADR-0010 unchanged.
+        assertEquals(
+            event.correlationId,
+            String(record.firstValue.headers().lastHeader(LogContext.HEADER).value(), Charsets.UTF_8),
+        )
     }
 
     @Test
@@ -77,12 +83,12 @@ class OutboxPublisherTests {
 
         publisher.publishBatch()
 
-        val value = argumentCaptor<String>()
-        verify(kafkaTemplate).send(any(), any(), value.capture())
+        val record = argumentCaptor<ProducerRecord<String, String>>()
+        verify(kafkaTemplate).send(record.capture())
         // Serialised once at write time and resent byte for byte, so a retry carries
         // the same eventId that consumers dedupe on. Re-serialising here would mint a
         // new one and break that.
-        assertEquals(event.payload, value.firstValue)
+        assertEquals(event.payload, record.firstValue.value())
     }
 
     @Test
@@ -100,7 +106,7 @@ class OutboxPublisherTests {
     fun `a send failure leaves publishedAt null`() {
         val event = outboxEvent()
         givenUnpublished(event)
-        whenever(kafkaTemplate.send(any(), any(), any()))
+        whenever(kafkaTemplate.send(any<ProducerRecord<String, String>>()))
             .thenReturn(CompletableFuture.failedFuture(RuntimeException("broker down")))
 
         // .get() on a failed future throws ExecutionException wrapping the cause,
@@ -119,7 +125,7 @@ class OutboxPublisherTests {
         publisher.publishBatch()
 
         // The poller runs every second forever; an idle one must not produce traffic.
-        verify(kafkaTemplate, never()).send(any(), any(), any())
+        verify(kafkaTemplate, never()).send(any<ProducerRecord<String, String>>())
     }
 
     @Test
@@ -137,7 +143,7 @@ class OutboxPublisherTests {
     }
 
     private fun givenSendSucceeds() {
-        whenever(kafkaTemplate.send(any(), any(), any()))
+        whenever(kafkaTemplate.send(any<ProducerRecord<String, String>>()))
             .thenReturn(CompletableFuture.completedFuture(mock<SendResult<String, String>>()))
     }
 
@@ -149,5 +155,6 @@ class OutboxPublisherTests {
         transactionId = transactionId,
         eventType = eventType,
         payload = payload,
+        correlationId = UUID.randomUUID().toString(),
     )
 }
