@@ -82,3 +82,5 @@ tasks.register<Test>("benchmark") {
 	useJUnitPlatform { includeTags("benchmark") }
 	testLogging { showStandardStreams = true }
 }
+
+tasks.named<Jar>("jar") { enabled = false }
