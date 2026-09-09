@@ -17,6 +17,11 @@ services:
       payments-db: { condition: service_healthy }
       redis: { condition: service_healthy }
       kafka: { condition: service_healthy }
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   ledger:
     build: ./ledger-service
@@ -30,6 +35,11 @@ services:
     depends_on:
       ledger-db: { condition: service_healthy }
       kafka: { condition: service_healthy }
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   payments-db:
     image: postgres:16-alpine
@@ -114,8 +124,24 @@ services:
       timeout: 10s
       retries: 30
 
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    # Reaches both services by name on this network, which is why neither needs a
+    # published port for scraping. The config is mounted read-only - nothing inside
+    # the container has any business rewriting it.
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: [ "9090:9090" ]
+    depends_on:
+      payment-api: { condition: service_healthy }
+      ledger: { condition: service_healthy }
+
 volumes:
   payments-data:
   ledger-data:
   kafkadata:
+  prometheus-data:
+
+
 
