@@ -1,0 +1,12 @@
+[
+  {"q": "why did transaction demo-8 fail?",                    "expect": "demo-8"},
+  {"q": "what happened with demo-5",                           "expect": "demo-5"},
+  {"q": "why optimistic locking instead of pessimistic?",      "expect": "0001-optimistic-locking"},
+  {"q": "why did you choose the outbox pattern?",              "expect": "0004-outbox"},
+  {"q": "how does the correlation id survive the outbox?",     "expect": "0011-carry-the-correlation-id"},
+  {"q": "why is redis used for idempotency keys?",             "expect": "0002-redis-backed-idempotency"},
+  {"q": "how do you know if the outbox is falling behind?",    "expect": "0013-watch-the-outbox-backlog-age"},
+  {"q": "why are logs written as JSON only in containers?",    "expect": "0012-log-as-json"},
+  {"q": "why store balances instead of deriving them?",        "expect": "0007-store-balances"},
+  {"q": "how are duplicate messages handled by the consumer?", "expect": "0005-processed-events"}
+]
