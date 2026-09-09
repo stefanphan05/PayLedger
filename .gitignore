@@ -17,3 +17,9 @@ planning/
 
 # Obsidian
 .obsidian/
+
+insights-service/data/*.jsonl
+
+# Python
+__pycache__/
+*.pyc
