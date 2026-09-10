@@ -7,6 +7,9 @@ On each anomaly it asks `insights-service` why, in plain English, and stores the
 
 No change to how payments are processed. One additive change to the payment event contract.
 
+`analytics-service` is a fourth Kotlin/Spring Boot service with its own Postgres database, following the same shape as `ledger-service`.
+
+![PayLedger system architecture with the analytics service](../../assets/system-architecture-diagram-analysis.png)
 ## 2. Problem
 `TransactionService.settle()` publishes a `PAYMENT_STATUS_CHANGED` event through the transactional outbox onto the `payment-events` topic every time the ledger's verdict lands ([`TransactionService.kt:145`](../../payment-api-service/src/main/kotlin/com/stefan/payment_api_service/transaction/service/TransactionService.kt)).
 
@@ -55,19 +58,8 @@ Two gaps in the current event contract block any useful analysis:
 | NFR6 | A first start replays retained history without special tooling            |
 
 ---
-
-## 5. Architecture
-
-`analytics-service` is a fourth Kotlin/Spring Boot service with its own Postgres database, following the same shape as `ledger-service`. It joins `kafka` as a **second consumer group**.
-
-![PayLedger system architecture with the analytics service](../../assets/system-architecture-diagram-analysis.png)
-
-This is the demonstration that the event-driven design pays off: adding a whole new service requires **no change to `ledger-service` and no behavioural change to `payment-api-service`** beyond adding two fields to an event it already publishes.
-
----
-
-## 6. Detailed design
-### 6.1 Data model
+## 5. Detailed design
+### 5.1 Data model
 
 ```sql
 CREATE TABLE payment_facts (
@@ -113,7 +105,7 @@ CREATE TABLE anomalies (
 ```
 
 Plus `processed_events` and `outbox_events`, copied unchanged from the existing services.
-### 6.2 Anomaly detection
+### 5.2 Anomaly detection
 The rule watches the failure rate over a short recent window (say, the last 10 minutes) and compares it to a longer baseline window (say, the last hour). If the recent rate is a fixed amount higher for long enough, it flags an anomaly.
 
 ```
@@ -133,8 +125,7 @@ every 60 seconds:
 ```
 
 ---
-
-## 7. API
+## 6. API
 
 All endpoints require the existing JWT with `ROLE_ADMIN`, consistent with `PATCH /transactions/{id}/status`. Service runs on container port 8080, published on host port 8081.
 
