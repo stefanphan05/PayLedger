@@ -60,7 +60,7 @@ Two gaps in the current event contract block any useful analysis:
 
 `analytics-service` is a fourth Kotlin/Spring Boot service with its own Postgres database, following the same shape as `ledger-service`. It joins `kafka` as a **second consumer group**.
 
-![[system-architecture-diagram-anlysis.png]]
+![PayLedger system architecture with the analytics service](../../assets/system-architecture-diagram-analysis.png)
 
 This is the demonstration that the event-driven design pays off: adding a whole new service requires **no change to `ledger-service` and no behavioural change to `payment-api-service`** beyond adding two fields to an event it already publishes.
 
