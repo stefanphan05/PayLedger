@@ -21,13 +21,19 @@ class JwtUtility(
 
     private val key: SecretKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret))
 
-    fun generateToken(userId: UUID, email: String): String {
+    fun generateToken(
+        userId: UUID,
+        email: String,
+        roles: Collection<String> = emptySet(),
+    ): String {
         val now = Date()
         val expiration = Date(now.time + expirationMs)
 
         return Jwts.builder()
             .subject(userId.toString())
             .claim("email", email)
+            // What lets a service with no users table decide whether a call is an admin.
+            .claim(ROLES_CLAIM, roles.toList())
             .issuedAt(now)
             .expiration(expiration)
             .signWith(key)
@@ -47,6 +53,11 @@ class JwtUtility(
 
     fun extractEmail(token: String): String? = getClaims(token)?.get("email", String::class.java)
 
+    fun extractRoles(token: String): Set<String> {
+        val claim = getClaims(token)?.get(ROLES_CLAIM) as? List<*> ?: return emptySet()
+        return claim.filterIsInstance<String>().toSet()
+    }
+
     fun isTokenValid(token: String): Boolean = getClaims(token) != null
 
     private fun getClaims(token: String): Claims? {
@@ -63,5 +74,9 @@ class JwtUtility(
             logger.debug("Rejected JWT: {}", e.message)
             null
         }
+    }
+
+    private companion object {
+        const val ROLES_CLAIM = "roles"
     }
 }

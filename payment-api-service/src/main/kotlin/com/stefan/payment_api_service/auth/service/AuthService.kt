@@ -54,7 +54,11 @@ class AuthService(
         val principle = authentication.principal as UserSecurity
 
         return AuthResponseDTO(
-            token = jwtUtility.generateToken(userId = principle.id, email = principle.email),
+            token = jwtUtility.generateToken(
+                userId = principle.id,
+                email = principle.email,
+                roles = principle.roleName()
+            ),
             expiresIn = jwtUtility.expirationMs / 1000
         )
     }
