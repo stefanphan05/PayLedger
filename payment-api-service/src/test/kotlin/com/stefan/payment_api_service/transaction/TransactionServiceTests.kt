@@ -280,6 +280,13 @@ class TransactionServiceTests {
         verify(paymentEventPublisher, never()).publish(any(), any())
     }
 
+    @Test
+    fun `an admin cannot hand-set under review`() {
+        assertThrows<IllegalArgumentException> {
+            transactionService.updateTransactionStatus(UUID.randomUUID(), TransactionStatus.UNDER_REVIEW)
+        }
+    }
+
     private fun mockTransaction(
         id: UUID = UUID.randomUUID(),
         amount: BigDecimal = BigDecimal("15.90"),
