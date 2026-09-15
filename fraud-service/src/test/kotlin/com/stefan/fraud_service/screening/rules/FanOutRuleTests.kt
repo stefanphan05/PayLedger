@@ -24,7 +24,7 @@ class FanOutRuleTests {
     fun `fires one recipient over the limit`() {
         assertEquals("FAN_OUT", rule.evaluate(mockCandidate(), mockHistory(distinctRecipients = 5))?.rule)
     }
-    
+
     @Test
     fun `combined with velocity it reaches the block threshold`() {
         val fanOut = properties.rules.fanOut.weight
