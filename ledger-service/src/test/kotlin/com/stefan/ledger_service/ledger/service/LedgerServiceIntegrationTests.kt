@@ -183,7 +183,7 @@ class LedgerServiceIntegrationTests @Autowired constructor(
         val transactionId = UUID.randomUUID()
         return PaymentEventEnvelope(
             eventId = UUID.randomUUID(),
-            eventType = "PAYMENT_INITIATED",
+            eventType = "PAYMENT_CLEARED",
             occurredAt = Instant.now(),
             transactionId = transactionId,
             payload = PaymentEventPayload(
