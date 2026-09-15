@@ -7,4 +7,4 @@ scrape_configs:
     static_configs:
       # Service names, not localhost: Prometheus is a container on this network.
       # ledger publishes no host port and does not need one to be scraped.
-      - targets: ["payment-api:8080", "ledger:8080"]
+      - targets: ["payment-api:8080", "ledger:8080", "fraud:8080"]
