@@ -17,13 +17,15 @@ class VelocityRuleTests {
 
     @Test
     fun `stays quiet at exactly the limit`() {
-        // maxPayments is 5, so five is fine and six is not
-        assertNull(rule.evaluate(mockCandidate(), mockHistory(recentCount = 5)))
+        // recentCount is what is already written; the candidate makes one more. So four
+        // priors is this sender's fifth payment, and maxPayments of 5 allows it.
+        assertNull(rule.evaluate(mockCandidate(), mockHistory(recentCount = 4)))
     }
 
     @Test
     fun `fires one payment over the limit`() {
-        val fired = rule.evaluate(mockCandidate(), mockHistory(recentCount = 6))
+        // Four priors plus this one is five and allowed, so five priors is the sixth.
+        val fired = rule.evaluate(mockCandidate(), mockHistory(recentCount = 5))
 
         assertEquals("VELOCITY", fired?.rule)
         assertEquals(properties.rules.velocity.weight, fired?.weight)
@@ -38,7 +40,10 @@ class VelocityRuleTests {
     fun `detail names the count and the window`() {
         val fired = rule.evaluate(mockCandidate(), mockHistory(recentCount = 7))
 
-        assertTrue(fired!!.detail.contains("7"), "was '${fired.detail}'")
+        // Eight, not seven: seven already written plus the one being screened. This
+        // string is what a reviewer reads before releasing someone's money, and it
+        // goes into the insights corpus verbatim, so it has to state what happened.
+        assertTrue(fired!!.detail.contains("8"), "was '${fired.detail}'")
         assertTrue(fired.detail.contains("60"), "was '${fired.detail}'")
     }
     

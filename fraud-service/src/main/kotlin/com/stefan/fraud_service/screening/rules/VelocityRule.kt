@@ -16,14 +16,16 @@ class VelocityRule(
     override fun evaluate(candidate: ScreenCandidate, history: SenderHistory): TriggeredRule? {
         val rule = properties.rules.velocity
 
-        if (history.recentCount <= rule.maxPayments) {
+        // The candidate counts itself, history holds only rows already written
+        val attempts = history.recentCount + 1
+        if (attempts <= rule.maxPayments) {
             return null
         }
 
         return TriggeredRule(
             rule = "VELOCITY",
             weight = rule.weight,
-            detail = "${history.recentCount} in ${rule.window.seconds}s",
+            detail = "$attempts in ${rule.window.seconds}s",
         )
     }
 }
