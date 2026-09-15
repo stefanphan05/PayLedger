@@ -45,6 +45,9 @@ payment-events:
 ledger-events:
   topic: ledger-events
 
+fraud-events:
+  topic: fraud-events
+
 idempotency:
   ttl: 24h
   ambiguous-failure-hold: 60s

@@ -4,6 +4,8 @@ import com.stefan.payment_api_service.auth.repository.UserRepository
 import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
+import com.stefan.payment_api_service.fraud.model.FraudEventEnvelope
+import com.stefan.payment_api_service.fraud.model.FraudVerdict
 import com.stefan.payment_api_service.ledger.model.LedgerEventEnvelope
 import com.stefan.payment_api_service.ledger.repository.ProcessedEventRepository
 import com.stefan.payment_api_service.outbox.service.PaymentEventPublisher
@@ -94,6 +96,10 @@ class TransactionService(
 
     @Transactional
     fun updateTransactionStatus(id: UUID, transactionStatus: TransactionStatus): Transaction {
+        require(transactionStatus != TransactionStatus.UNDER_REVIEW) {
+            "UNDER_REVIEW is set by fraud screening, not by hand"
+        }
+
         val transaction = getTransactionById(id)
         transaction.transactionStatus = transactionStatus
 
@@ -129,6 +135,35 @@ class TransactionService(
             // The other one: the ledger has told us how the payment ended, and this is
             // where the round trip closes.
             logger.info("Settled as {}", status)
+
+            return savedTransaction
+        }
+    }
+
+    /**
+     * Applied fraud-service's verdict
+     */
+    @Transactional
+    fun applyFraudVerdict(event: FraudEventEnvelope, verdict: FraudVerdict): Transaction? {
+        MDC.putCloseable(LogContext.TRANSACTION_ID, event.transactionId.toString()).use {
+            processedEvents.record(event.eventId, event.transactionId)
+            val transaction = getTransactionById(event.transactionId)
+
+            if (transaction.transactionStatus !in verdict.appliesTo) {
+                logger.debug(
+                    "Ignoring {} for transaction {} in state {}",
+                    verdict, transaction.id, transaction.transactionStatus,
+                )
+                return null
+            }
+
+            transaction.transactionStatus = verdict.newStatus
+            transaction.failureReason = verdict.failureReason
+
+            val savedTransaction = repository.save(transaction)
+            paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
+
+            logger.info("Fraud screening moved this payment to {}", verdict.newStatus)
 
             return savedTransaction
         }
