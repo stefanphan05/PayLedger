@@ -1,11 +1,14 @@
 # PayLedger
-PayLedger is a miniature payment system designed like real-world fintech platforms to move money safely, prevent accidental duplicate charges, and keep financial records completely accurate. Instead of packing everything into one big program, it splits the job between two dedicated workers that pass notes to each other using a messaging pipeline called Kafka, plus a third that can explain what any of it did and why.
+PayLedger is a miniature payment system designed like real-world fintech platforms to move money safely, prevent accidental duplicate charges, and keep financial records completely accurate. Instead of packing everything into one big program, it splits the job between three dedicated workers that pass notes to each other using a messaging pipeline called Kafka, plus a fourth that can explain what any of it did and why.
 
 ### payment-api-service
 `payment-api-service` is the public API. When a user clicks "Pay $15", this service catches the request, makes sure a double-click doesn't create two charges and immediately hands back a receipt marked "PENDING". It doesn't move any actual money itself, it simply logs the intent in its database and drops a message into the pipeline saying a new payment needs processing.
 
 ### ledger-service
 `ledger-service` acts as the private back-office accountant that never talks to the outside internet. It picks up that message, checks if the sender actually has enough funds, moves the balance using proper double-entry bookkeeping by taking that $15 from one account and adding $15 to the other. Once the money is safely moved, it sends a note back so the front door can officially flip the transaction status from "PENDING" to "COMPLETED".
+
+### fraud-service
+`fraud-service` is the one that says no. Before any money moves it looks at the payment and asks whether it fits a pattern worth worrying about: is this account paying unusually fast, is the amount far bigger than they normally send, are they suddenly paying a lot of different people. Each thing it spots is worth some points, and the total decides whether the payment goes through, waits for a person to look at it, or is refused outright. It uses plain rules with numbers you can read, not a model, so when a payment is held you can always say exactly why.
 
 ### insights-service
 `insights-service` is the one you can talk to. Ask it "why did transaction demo-8 fail?" and it finds that payment's actual log lines across both services and explains what happened, instead of you reading two sets of logs by hand. Ask it "why did you choose the outbox pattern?" and it answers from this repository's own design documents rather than guessing. It reads the system, it never changes anything in it.
@@ -14,7 +17,7 @@ PayLedger is a miniature payment system designed like real-world fintech platfor
 
 Every moving part, and what talks to what.
 
-![PayLedger component diagram](assets/component-diagram.png)
+![img.png](assets/component-diagram.png)
 
 ## Running it
 
@@ -50,6 +53,7 @@ without it; only `/insights/ask` depends on it.
 - [Testing](docs/testing.md) — what is tested, how to run it, and what is not covered
 - [Failure modes](docs/failure-modes.md) — what breaks when each piece goes down
 - [Observability](docs/features/observability.md) — finding one payment across both services
+- [Fraud screening](docs/features/fraud-detection.md) — the rules, the scores, and what happens to a held payment
 - [Insights retrieval](docs/features/insights-retrieval.md) — how a plain English question becomes an answer
 - [Assumptions](docs/assumptions.md) — what this project simplifies on purpose
 
@@ -57,9 +61,9 @@ without it; only `/insights/ask` depends on it.
 
 | Layer / Tool              | Technology              | Purpose in PayLedger                                                    |
 | :------------------------ | :---------------------- | :---------------------------------------------------------------------- |
-| **Language & Framework**  | Kotlin, Spring Boot 4   | Core microservices framework (`payment-api` & `ledger`)                 |
+| **Language & Framework**  | Kotlin, Spring Boot 4   | Core microservices framework (`payment-api`, `ledger` & `fraud`)        |
 | **Insights Service**      | Python, FastAPI         | Question answering over the system's own logs and docs (`insights`)     |
-| **Primary Datastores**    | PostgreSQL 16           | Separate, isolated DBs for transactions and double-entry ledger         |
+| **Primary Datastores**    | PostgreSQL 16           | Separate, isolated DBs for transactions, the ledger and fraud decisions |
 | **Cache & Deduplication** | Redis 7                 | Distributed locking & atomic `SETNX` idempotency reservation            |
 | **Event Broker**          | Apache Kafka 4 (KRaft)  | Asynchronous, decoupled event-driven communication                      |
 | **Migrations**            | Flyway                  | Versioned, reproducible schema management (no auto-DDL)                 |
