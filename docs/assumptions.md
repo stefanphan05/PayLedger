@@ -8,8 +8,9 @@ What this project simplifies on purpose, so "what are the limits of your system?
 * No overdrafts. Every balance is checked before applying, and the database blocks negatives.
 * No FX. Sender currency, recipient currency and payment currency must all match. Revisit in the future when we want to support FX
 * `NUMERIC(19,4)` assumes every currency has 4 decimal places. JPY has 0.
-* One funding account per currency (AUD and USD), by convention only. Nothing stops a second one being created.
-* Money only enters the system by hand, via a manual balanced insert. The deposit route potentially considered in the future
+* One funding account per currency (AUD and USD), by convention only. Nothing stops a second one being created, and the ledger takes the first one it finds.
+* Money enters and leaves through `POST /transactions/deposits` and `POST /transactions/withdrawals`. There is no card or bank provider behind either, so a deposit creates money out of nothing — which is why only an admin can ask for one.
+* A deposit or withdrawal in a currency the platform holds no cash in is refused by the ledger (`NO_FUNDING_ACCOUNT`) rather than creating an account for it.
 ## Messaging
 * Kafka delivers at least once, never exactly once. Exactly once would need the broker and Postgres to commit together, which is a distributed transaction.
 * Duplicates are handled by the `processed_events` primary key, inserted in the same database transaction as the entries.
@@ -48,7 +49,7 @@ What this project simplifies on purpose, so "what are the limits of your system?
 * No index on the stored numbers. Every row is compared on every question, which is faster than an index at this size and stops being true somewhere near a million.
 ## Known gaps
 The things below are real bugs waiting to happen, not accepted trade offs.
-* **No currency validation.** A EUR payment creates EUR wallets even though no EUR funding account exists. Harmless today (it gets rejected for insufficient funds), but once deposits work you could have EUR owed to users with no EUR held. Fix: reject when no ASSET account exists for that currency.
+* **No currency validation on transfers.** A EUR transfer still creates EUR wallets even though no EUR funding account exists. Harmless today, it gets rejected for insufficient funds. Deposits and withdrawals no longer have this hole — they check for the funding account first — but transfers are still not checked. Fix: make the transfer path ask the same question.
 * **No error handler.** A message that cannot be read is retried ten times and then dropped, with nothing kept to look at afterwards. Fix is a dead letter topic in feature 08.
 * **Retries and drops carry no correlation id.** Those lines come from the messaging framework, outside our code, so they are the only part of a payment's history that a log search will not find. Same fix, feature 08.
 ## Health check

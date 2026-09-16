@@ -121,3 +121,4 @@ What drags the totals down is wiring rather than logic: controllers, config clas
 
 - **No end-to-end test.** Nothing starts both services and drives them like a user would. The contract pair is the substitute, and it does not prove the two run correctly together only that they agree about the message.
 - **No load test in the suite.** `payment-api-service/load-test/` is a separate k6 run, started by hand.
+- **Deposits and withdrawals are not covered yet.** The three suites pass with the new routes in place, and the contract fixtures were updated so the pair still agree, but nothing yet exercises a deposit raising both sides of the ledger, a withdrawal lowering them, an overdrawn withdrawal, or a currency with no funding account. Those are the first tests to write.
