@@ -36,7 +36,7 @@ It is optional. When absent, or when the supplied value is rejected, the service
 An accepted id is 1–64 characters of letters, digits, `-` and `_`. Anything outside
 that (whitespace, punctuation, newlines, or an over-long value) is **replaced with a generated id rather than rejected**, a bad correlation id never fails a request. The constraint exists because the value is written to logs and to a database column.
 
-Given an id, `docker compose logs | grep <id>` returns every log line both services produced for that payment, in order. See [observability.md](observability.md).
+Given an id, `docker compose logs | grep <id>` returns every log line both services produced for that payment, in order. See [observability.md](features/observability.md).
 
 ## Error format
 
@@ -369,7 +369,7 @@ Returns `200`, not an error, because an empty corpus is a state rather than a fa
 ```
 
 Run the ingestion step and ask again — see
-[insights-retrieval.md](insights-retrieval.md).
+[insights-retrieval.md](features/insights-retrieval.md).
 
 **Errors**
 

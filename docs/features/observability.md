@@ -2,7 +2,7 @@
 
 How to find out what happened to one payment, and how to tell when the system is quietly falling behind.
 
-This is the companion to [architecture.md](architecture.md): that diagram shows what moves, this one shows what you can see while it moves. The reasoning behind each choice is in [ADR-0011](decisions/0011-carry-the-correlation-id-in-a-kafka-header.md), [ADR-0012](decisions/0012-log-as-json-in-containers-only.md) and [ADR-0013](decisions/0013-watch-the-outbox-backlog-age.md).
+This is the companion to [architecture.md](../architecture.md): that diagram shows what moves, this one shows what you can see while it moves. The reasoning behind each choice is in [ADR-0011](../decisions/0011-carry-the-correlation-id-in-a-kafka-header.md), [ADR-0012](../decisions/0012-log-as-json-in-containers-only.md) and [ADR-0013](../decisions/0013-watch-the-outbox-backlog-age.md).
 
 ## Why the id has to be stored, not remembered
 
@@ -76,6 +76,6 @@ Almost all of it is the first gap, and that is the outbox poller's one-second in
 
 - **No log aggregator.** Two containers and `grep` is enough at this size. A shipper and a search backend is a lot of infrastructure to answer a question `docker compose logs` already answers.
 - **No alerting rules.** The measurements exist and the failure is visible, but nothing raises an alarm, someone has to look. The obvious first rule is `payledger_outbox_oldest_age_seconds` staying above a minute.
-- **No distributed tracing.** No spans, no timing breakdown within a service. The correlation id answers "what happened", not "where did the time go". [ADR-0011](decisions/0011-carry-the-correlation-id-in-a-kafka-header.md) covers when that would be worth adding.
+- **No distributed tracing.** No spans, no timing breakdown within a service. The correlation id answers "what happened", not "where did the time go". [ADR-0011](../decisions/0011-carry-the-correlation-id-in-a-kafka-header.md) covers when that would be worth adding.
 - **Retry and drop logs carry no id.** When a message cannot be read at all, the retries and the eventual giving-up are logged by the messaging framework, outside any code of ours, so they are the one part of a payment's history with nothing to search for. Feature 08's dead letter topic is where that gets fixed.
 - **The measurement endpoints have no login.** Fine while they are only reachable on the private network between containers. Exposing them publicly would need that revisited.

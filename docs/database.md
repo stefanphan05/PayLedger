@@ -135,7 +135,7 @@ Postgres with the `pgvector` extension, rather than a separate search database
 The two indexes serve the exact half of a search; there is deliberately **no index on `embedding`**. At this size, checking every row is faster than maintaining one.
 
 Ingestion empties this table and rebuilds it, so it holds no history — see
-[insights-retrieval.md](insights-retrieval.md).
+[insights-retrieval.md](features/insights-retrieval.md).
 
 ## Redis
 

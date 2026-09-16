@@ -84,4 +84,4 @@ payledger_outbox_unpublished          # how many are waiting
 payledger_ledger_outcome_total        # what the ledger is deciding, by reason
 ```
 
-[observability.md](observability.md) covers reading these properly.
+[observability.md](features/observability.md) covers reading these properly.
