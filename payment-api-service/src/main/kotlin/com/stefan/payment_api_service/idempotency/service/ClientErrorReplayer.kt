@@ -1,6 +1,7 @@
 package com.stefan.payment_api_service.idempotency.service
 
 import com.stefan.payment_api_service.exception.idempotency.IdempotencyReplayUnavailableException
+import com.stefan.payment_api_service.exception.transaction.ManualReviewStatusException
 import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import org.springframework.stereotype.Component
@@ -18,6 +19,7 @@ class ClientErrorReplayer {
      */
     private val rebuildFunctions: Map<String, (message: String) -> RuntimeException> = mapOf(
         SelfTransferException::class.simpleName!! to { _ -> SelfTransferException() },
+        ManualReviewStatusException::class.simpleName!! to { _ -> ManualReviewStatusException() },
         RecipientNotFoundException::class.simpleName!! to { message -> RecipientNotFoundException.fromMessage(message) },
     )
 

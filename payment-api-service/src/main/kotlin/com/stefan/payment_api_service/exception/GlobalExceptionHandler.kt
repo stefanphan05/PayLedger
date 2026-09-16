@@ -5,6 +5,7 @@ import com.stefan.payment_api_service.exception.idempotency.IdempotencyConflictE
 import com.stefan.payment_api_service.exception.idempotency.IdempotencyKeyReuseException
 import com.stefan.payment_api_service.exception.idempotency.IdempotencyReplayUnavailableException
 import com.stefan.payment_api_service.exception.idempotency.InvalidIdempotencyKeyException
+import com.stefan.payment_api_service.exception.transaction.ManualReviewStatusException
 import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
@@ -61,6 +62,16 @@ class GlobalExceptionHandler: ResponseEntityExceptionHandler() {
             e.message
         )
         problem.title = "Recipient Not Found"
+        return problem
+    }
+
+    @ExceptionHandler(ManualReviewStatusException::class)
+    fun handleManualReviewStatusException(e: ManualReviewStatusException): ProblemDetail {
+        val problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            e.message
+        )
+        problem.title = "Invalid Status"
         return problem
     }
 

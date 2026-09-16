@@ -1,6 +1,7 @@
 package com.stefan.payment_api_service.transaction.service
 
 import com.stefan.payment_api_service.auth.repository.UserRepository
+import com.stefan.payment_api_service.exception.transaction.ManualReviewStatusException
 import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
@@ -96,9 +97,10 @@ class TransactionService(
 
     @Transactional
     fun updateTransactionStatus(id: UUID, transactionStatus: TransactionStatus): Transaction {
-        require(transactionStatus != TransactionStatus.UNDER_REVIEW) {
-            "UNDER_REVIEW is set by fraud screening, not by hand"
-        }
+        // A thrown ClientError rather than require(): an IllegalArgumentException has
+        // no handler, so the caller was told the server broke when they had simply
+        // asked for something that is never allowed.
+        if (transactionStatus == TransactionStatus.UNDER_REVIEW) throw ManualReviewStatusException()
 
         val transaction = getTransactionById(id)
         transaction.transactionStatus = transactionStatus
