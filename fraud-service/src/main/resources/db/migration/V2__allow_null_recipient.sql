@@ -1,0 +1,1 @@
+ALTER TABLE payment_attempts ALTER COLUMN recipient_id DROP NOT NULL;

@@ -46,6 +46,11 @@ class ScreeningService(
         )
 
         val payload = envelope.payload
+
+        if (payload.type == PaymentEventPayload.DEPOSIT) {
+            return clearWithoutScreening(payload)
+        }
+
         val candidate = ScreenCandidate.of(payload, Instant.now())
         val history = historyFor(candidate)
         val decision = decide(candidate, history)
@@ -132,6 +137,19 @@ class ScreeningService(
         FraudAction.ALLOW -> FraudEventType.PAYMENT_CLEARED
         FraudAction.REVIEW -> FraudEventType.PAYMENT_HELD
         FraudAction.BLOCK -> FraudEventType.PAYMENT_BLOCKED
+    }
+
+    private fun clearWithoutScreening(payload: PaymentEventPayload): Decision {
+        val decision = Decision(
+            action = FraudAction.ALLOW,
+            score = 0,
+            triggeredRules = emptyList(),
+        )
+
+        publish(payload, decision)
+        logger.info("Deposit cleared without screening")
+
+        return decision
     }
 
     private companion object {

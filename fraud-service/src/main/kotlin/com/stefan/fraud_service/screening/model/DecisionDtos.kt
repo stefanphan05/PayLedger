@@ -9,7 +9,9 @@ import java.util.UUID
 data class DecisionResponseDTO(
     val transactionId: UUID,
     val senderId: UUID,
-    val recipientId: UUID,
+
+    /** Null on a withdrawal: the money left the system, it did not go to anyone. */
+    val recipientId: UUID?,
 
     // As a string, matching every other money field in this system.
     @field:JsonFormat(shape = JsonFormat.Shape.STRING)

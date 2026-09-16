@@ -22,8 +22,9 @@ class PaymentAttempt(
     @Column(name = "sender_id", nullable = false, updatable = false)
     val senderId: UUID,
 
-    @Column(name = "recipient_id", nullable = false, updatable = false)
-    val recipientId: UUID,
+    // Null on a withdrawal, which has no recipient.
+    @Column(name = "recipient_id", updatable = false)
+    val recipientId: UUID?,
 
     @Column(name = "amount", nullable = false, precision = 19, scale = 4, updatable = false)
     val amount: BigDecimal,

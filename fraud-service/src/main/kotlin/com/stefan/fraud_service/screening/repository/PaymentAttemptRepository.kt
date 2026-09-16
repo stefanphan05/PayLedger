@@ -39,7 +39,7 @@ interface PaymentAttemptRepository: JpaRepository<PaymentAttempt, UUID> {
     )
     fun historyFor(
         @Param("senderId") senderId: UUID,
-        @Param("recipientId") recipientId: UUID,
+        @Param("recipientId") recipientId: UUID?,
         @Param("transactionId") transactionId: UUID,
         @Param("velocityFrom") velocityFrom: Instant,
         @Param("fanOutFrom") fanOutFrom: Instant,
