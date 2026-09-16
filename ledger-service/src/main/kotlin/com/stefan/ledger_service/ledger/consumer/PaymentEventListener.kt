@@ -25,7 +25,7 @@ class PaymentEventListener(
 ) {
     private var logger = LoggerFactory.getLogger(javaClass)
 
-    @KafkaListener(topics = ["payment-events"])
+    @KafkaListener(topics = ["\${fraud-events.topic}"])
     fun onPaymentEvent(record: ConsumerRecord<String, String>) {
         MDC.putCloseable(LogContext.CORRELATION_ID, LogContext.of(record)).use {
             val event = parseEvent(record)
@@ -36,7 +36,7 @@ class PaymentEventListener(
     }
 
     private fun process(event: PaymentEventEnvelope) {
-        if (!isPaymentInitiated(event)) {
+        if (!isPaymentCleared(event)) {
             ignoreEvent(event)
             return
         }
@@ -71,10 +71,10 @@ class PaymentEventListener(
     }
 
 
-    private fun isPaymentInitiated(
+    private fun isPaymentCleared(
         event: PaymentEventEnvelope,
     ): Boolean {
-        return event.eventType == PAYMENT_INITIATED
+        return event.eventType == PAYMENT_CLEARED
     }
 
     private fun ignoreEvent(
@@ -96,6 +96,6 @@ class PaymentEventListener(
     }
 
     private companion object {
-        const val PAYMENT_INITIATED = "PAYMENT_INITIATED"
+        const val PAYMENT_CLEARED = "PAYMENT_CLEARED"
     }
 }

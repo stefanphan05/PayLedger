@@ -42,6 +42,9 @@ ledger-events:
   batch-size: 100
   send-timeout: 5s
 
+fraud-events:
+  topic: fraud-events
+
 management:
   endpoints:
     web:

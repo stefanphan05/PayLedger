@@ -7,7 +7,7 @@ Both Kotlin services use JUnit 5. Anything that touches a database or a queue ru
 ## Running them
 
 ```bash
-cd payment-api-service && ./gradlew test     # or cd ledger-service
+cd payment-api-service && ./gradlew test     # or cd ledger-service, or fraud-service
 ```
 
 Docker has to be running, most of these tests start a Postgres or a Kafka. A coverage report is written automatically after every run:
@@ -52,6 +52,16 @@ Latency benchmarks are excluded from the normal run, because they measure timing
 | `LedgerVerdictContractTests` | this service still sends what the API expects |
 | `LogContextTests` | the correlation id survives the Kafka hop |
 
+## The fraud suite
+
+`fraud-service` splits cleanly in two.
+
+The **five rules are pure functions** of a payment and the sender's history, so they test with no Spring context, no database and no mocks. Each one is pinned at its threshold: exactly at the limit must stay quiet, one over must fire. That boundary is the difference between catching a burst and holding someone's rent, and two real bugs were caught by writing it down — two rules had their bodies swapped, and one compared nothing at all and fired on every payment.
+
+Everything else runs against a real Postgres. The one that matters most is the redelivery test: screening the same message twice must produce exactly **one** outgoing message. It is the only thing standing between an at-least-once delivery and the ledger moving the same money twice, because a second screening would publish a verdict with a new id that the ledger cannot recognise as a repeat.
+
+There is also a test asserting the decision log line contains the score and the rule names. That line is the only route a decision takes into the searchable corpus, so if it stops carrying numbers, every future answer about a blocked payment quietly becomes useless.
+
 ## The contract pair
 
 The two services never run together in one test. They have files with the same names in the same packages, so they cannot start inside a single JVM, and running them as two separate programs cost far more setup than it proved
@@ -67,6 +77,20 @@ src/test/resources/contract/ledger-verdict.json
 - The **API** takes that file, sends it through a real Kafka, and checks the payment settles.
 
 Change the message format on either side and one of the two tests fails. The catch is that the file is duplicated: editing one copy and not the other makes both tests pass while the services disagree.
+
+### And a contract set of three
+
+Fraud screening added a second message, and this one has two readers rather than one:
+
+```
+src/test/resources/contract/fraud-verdict.json
+```
+
+- **fraud-service** screens a real payment and checks the message it produced matches the file, field for field.
+- **ledger-service** reads the file with the data classes it already had, and checks every field it needs to move money survived.
+- **payment-api-service** reads the same file and checks it can pick out the verdict.
+
+The ledger's half is the important one. Its data classes ignore fields they do not recognise, so a renamed field would not fail a build — it would read as absent, and settlement would break quietly. This test is the only thing that turns that into a loud failure.
 
 ## Coverage
 

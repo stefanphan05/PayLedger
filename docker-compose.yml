@@ -41,6 +41,27 @@ services:
       timeout: 3s
       retries: 20
 
+  fraud:
+    build: ./fraud-service
+    environment:
+      FRAUD_DB_URL: jdbc:postgresql://fraud-db:5432/fraud_db
+      FRAUD_DB_USERNAME: ${FRAUD_DB_USERNAME:-user}
+      FRAUD_DB_PASSWORD: ${FRAUD_DB_PASSWORD:-password}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    # Published, unlike ledger. The review queue is a human surface and you need to
+    # reach it from your machine. 8081 stays reserved for the analytics service.
+    ports: [ "8082:8080" ]
+    depends_on:
+      fraud-db: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   payments-db:
     image: postgres:16-alpine
     environment:
@@ -84,6 +105,21 @@ services:
       - ./infra/insights-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${INSIGHTS_DB_USERNAME:-user} -d insights_db" ]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  fraud-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fraud_db
+      POSTGRES_USER: ${FRAUD_DB_USERNAME:-user}
+      POSTGRES_PASSWORD: ${FRAUD_DB_PASSWORD:-password}
+    ports: [ "5435:5432" ]
+    volumes:
+      - fraud-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${FRAUD_DB_USERNAME:-user} -d fraud_db" ]
       interval: 2s
       timeout: 3s
       retries: 15
@@ -179,10 +215,12 @@ services:
     depends_on:
       payment-api: { condition: service_healthy }
       ledger: { condition: service_healthy }
+      fraud: { condition: service_healthy }
 
 volumes:
   payments-data:
   ledger-data:
+  fraud-data:
   kafkadata:
   prometheus-data:
   insights-data:

@@ -114,6 +114,36 @@ Append-only. Correcting a mistake means writing a reversing pair, never updating
 **processed_events** and **outbox_events** the same shape as the payment side.
 `processed_events.event_id` as a primary key is the whole idempotency mechanism: the insert happens in the same transaction as the entries, so a redelivered message raises a unique violation and rolls the entire apply back instead of moving money twice ([ADR-0005](decisions/0005-processed-events-for-consumer-idempotency.md)).
 
+## fraud-db
+![](../assets/erd-fraud-db.png)
+The screener's own database. Nothing else reads it, and it holds no money, only what was decided about each payment and why.
+
+**payment_attempts**
+
+| Column | Type | Notes |
+|---|---|---|
+| `transaction_id` | UUID | primary key |
+| `sender_id`, `recipient_id` | UUID | |
+| `amount` | NUMERIC(19,4) | |
+| `currency` | CHAR(3) | |
+| `screened_at` | TIMESTAMPTZ | |
+| `correlation_id` | VARCHAR(64) | the flow the payment arrived on |
+| `decision` | TEXT | `ALLOW`, `REVIEW` or `BLOCK` |
+| `score` | INT | 0 to 100 |
+| `triggered_rules` | JSONB | which rules fired, their points, and a short reason |
+| `overridden_at` | TIMESTAMPTZ | null unless a person overturned it |
+| `overridden_to` | TEXT | what they changed it to |
+
+The payment's own id is the primary key rather than a generated one. A payment is screened once, and keying on it is what makes a redelivered message overwrite rather than add a second row, which would otherwise corrupt every count the rules read.
+
+`correlation_id` is stored so that an admin overturning the decision later can be recorded under the id the payment arrived on, keeping the whole story in one place when the logs are searched.
+
+Three indexes, matching the only three questions asked of it: this sender's recent payments, has this sender paid this recipient before, and what is waiting for review.
+
+There are **no foreign keys** between the three tables here. They are separate concerns that happen to share a database, and `transaction_id` is a value copied from another service, not a reference to anything local.
+
+**processed_events** and **outbox_events**, the same shape as the other two services. The duplicate guard matters more here than anywhere else: a redelivered message would produce a second cleared message carrying a new id, and the ledger checks ids, so it would not recognise the repeat and would move the money twice.
+
 ## insights-db
 ![](../assets/erd-insights-db.png)
 
@@ -135,7 +165,7 @@ Postgres with the `pgvector` extension, rather than a separate search database
 The two indexes serve the exact half of a search; there is deliberately **no index on `embedding`**. At this size, checking every row is faster than maintaining one.
 
 Ingestion empties this table and rebuilds it, so it holds no history — see
-[insights-retrieval.md](insights-retrieval.md).
+[insights-retrieval.md](features/insights-retrieval.md).
 
 ## Redis
 
@@ -171,6 +201,12 @@ Both Kotlin services use Flyway, and `ddl-auto` is `none`, nothing is ever creat
 | `V7__add_processed_events` | `processed_events` |
 | `V8__add_failure_reason` | the column holding why the ledger refused |
 | `V9__add_correlation_id_to_outbox` | back-filled from `transaction_id`, then made `NOT NULL` |
+
+**fraud-db**
+
+| | What it did |
+|---|---|
+| `V1__init` | `payment_attempts`, `processed_events`, `outbox_events` and their indexes |
 
 **ledger-db**
 

@@ -1,6 +1,8 @@
 package com.stefan.payment_api_service.transaction
 
 import com.stefan.payment_api_service.auth.repository.UserRepository
+import com.stefan.payment_api_service.exception.ClientError
+import com.stefan.payment_api_service.exception.transaction.ManualReviewStatusException
 import com.stefan.payment_api_service.exception.transaction.RecipientNotFoundException
 import com.stefan.payment_api_service.exception.transaction.SelfTransferException
 import com.stefan.payment_api_service.exception.transaction.TransactionNotFoundException
@@ -278,6 +280,27 @@ class TransactionServiceTests {
         verify(transactionRepository).findById(id)
         verify(transactionRepository, never()).save(any())
         verify(paymentEventPublisher, never()).publish(any(), any())
+    }
+
+    @Test
+    fun `an admin cannot hand-set under review`() {
+        assertThrows<ManualReviewStatusException> {
+            transactionService.updateTransactionStatus(UUID.randomUUID(), TransactionStatus.UNDER_REVIEW)
+        }
+    }
+
+    /**
+     * The exception type is the whole point here, not a detail. It decides what the
+     * caller is told: anything without a handler is reported as the server breaking,
+     * which is how this refusal used to surface as a 500.
+     */
+    @Test
+    fun `refusing a hand-set under review is a client error`() {
+        val thrown = assertThrows<ManualReviewStatusException> {
+            transactionService.updateTransactionStatus(UUID.randomUUID(), TransactionStatus.UNDER_REVIEW)
+        }
+
+        assertTrue(thrown is ClientError, "must be a ClientError so a retry replays the same refusal")
     }
 
     private fun mockTransaction(

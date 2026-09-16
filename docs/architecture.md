@@ -56,42 +56,49 @@ sequenceDiagram
     participant PayAPI as payment-api-service
     participant Redis as Redis
     participant PayDB as Payments DB
-    participant Poller1 as Outbox Relay (payment)
     participant Kafka as Apache Kafka
+    participant Fraud as fraud-service
+    participant FraudDB as Fraud DB
     participant Ledger as ledger-service
     participant LedgerDB as Ledger DB
-    participant Poller2 as Outbox Relay (ledger)
 
     Client->>PayAPI: POST /transactions<br/>Idempotency-Key, X-Correlation-Id (optional)
-    Note over PayAPI: 1. Correlation id generated if absent.<br/>Held for the life of the request only
-
     PayAPI->>Redis: SETNX user + key + body hash
     Redis-->>PayAPI: claimed (a repeat is replayed instead)
-
     PayAPI->>PayDB: INSERT transaction (PENDING)<br/>+ outbox_events (correlation_id)
-    Note over PayDB: 2. Written down, because the<br/>request ends before the send
-    PayAPI->>Redis: store the response against the key
     PayAPI-->>Client: 201 PENDING
+    Note over PayAPI: 1. Unchanged by fraud screening. This<br/>service does not know fraud-service exists
 
-    PayDB-->>Poller1: Poll outbox_events (every 1s)
-    Poller1->>Kafka: Produce payment-events: PAYMENT_INITIATED<br/>+ header X-Correlation-Id
-    Note over Poller1: 3. A different thread. Reads the<br/>id from the row, not from memory
+    PayDB-->>Kafka: Outbox relay (1s):<br/>payment-events PAYMENT_INITIATED
 
-    Kafka->>Ledger: Consume payment-events
-    Note over Ledger: 4. Reads the header back off<br/>the record
-    Ledger->>LedgerDB: INSERT processed_events + 2 entries<br/>+ UPDATE balances + INSERT outbox
-    Note over LedgerDB: 5. One transaction. Same id continues<br/>onto the ledger's outgoing message
+    Kafka->>Fraud: Consume payment-events
+    Fraud->>FraudDB: SELECT this sender's recent history
+    Note over Fraud: 2. One query feeds all five rules.<br/>This sits on the settlement path
+    Fraud->>FraudDB: INSERT processed_events + payment_attempts<br/>+ outbox_events
+    Note over FraudDB: 3. One transaction. The duplicate guard, the<br/>decision and the message commit together
 
-    LedgerDB-->>Poller2: Poll ledger outbox
-    Poller2->>Kafka: Produce ledger-events:<br/>PAYMENT_COMPLETED or PAYMENT_FAILED
+    FraudDB-->>Kafka: Outbox relay (1s): fraud-events
 
-    Kafka->>PayAPI: Consume ledger-events
-    PayAPI->>PayDB: INSERT processed_events<br/>+ UPDATE status / failure_reason + INSERT outbox
-    Note over PayAPI: Same id the request started with,<br/>1.6 seconds and four threads later
-
-    PayDB-->>Poller1: Poll outbox_events
-    Poller1->>Kafka: Produce payment-events: PAYMENT_STATUS_CHANGED
+    alt score below 40 - ALLOW
+        Kafka->>Ledger: Consume fraud-events: PAYMENT_CLEARED
+        Note over Ledger: 4. The only message it acts on. Its DTOs<br/>never changed: same envelope, new topic
+        Ledger->>LedgerDB: INSERT processed_events + 2 entries<br/>+ UPDATE balances + INSERT outbox
+        LedgerDB-->>Kafka: Outbox relay: ledger-events<br/>PAYMENT_COMPLETED or PAYMENT_FAILED
+        Kafka->>PayAPI: Consume ledger-events
+        PayAPI->>PayDB: UPDATE status COMPLETED or FAILED
+    else score 40 to 69 - REVIEW
+        Kafka->>PayAPI: Consume fraud-events: PAYMENT_HELD
+        PayAPI->>PayDB: UPDATE status UNDER_REVIEW
+        Note over Ledger: 5. Never receives it. No money moves<br/>until a person releases it
+    else score 70 or more - BLOCK
+        Kafka->>PayAPI: Consume fraud-events: PAYMENT_BLOCKED
+        PayAPI->>PayDB: UPDATE status FAILED,<br/>failure_reason FRAUD_BLOCKED
+    end
 ```
+
+Two of the three outcomes never reach the ledger, which is the whole point of screening before settlement rather than after it.
+
+Screening adds one store-and-forward hop, so a payment now takes roughly twice as long to settle as it used to: two outbox relays at a second each rather than one. A cleared payment still settles in a few seconds. A held one waits for a person, with no timeout.
 
 ### Monitoring and insights
 
@@ -101,6 +108,7 @@ sequenceDiagram
     participant Prom as Prometheus
     participant PayAPI as payment-api-service
     participant Ledger as ledger-service
+    participant Fraud as fraud-service
     actor Operator
     participant Corpus as The corpus
     participant Insights as insights-service
@@ -109,6 +117,7 @@ sequenceDiagram
     loop every 15s
         Prom->>PayAPI: GET /actuator/prometheus
         Prom->>Ledger: GET /actuator/prometheus
+        Prom->>Fraud: GET /actuator/prometheus
     end
     Note over Prom: payledger_outbox_oldest_age_seconds<br/>is the number worth watching
 
@@ -153,7 +162,17 @@ Three things reject a payment ([ADR-0009](decisions/0009-store-the-rejection-rea
 
 All three still publish an event, a refusal is an answer, and the `payment-api-service` is holding a `PENDING` row waiting for one.
 
-### 3. insights-service
+### 3. fraud-service
+
+No public API for payments. It reads `payment-events`, decides, and publishes to `fraud-events`. Nothing calls it and nothing waits on it, so if it is down payments are still accepted and simply wait on the topic.
+
+Five rules score a payment out of 100: how fast the sender is paying, how large the amount is, how it compares to their own average, whether the recipient is new, and how many different people they have paid. Below 40 the payment clears, 40 to 69 holds it for a person, 70 or more refuses it ([ADR-0021](decisions/0021-a-weighted-rule-score-instead-of-a-model.md)).
+
+The duplicate guard matters more here than anywhere else. A redelivered message would produce a *second* cleared message with a new id, and the ledger, which checks ids, would not recognise it as a repeat and would move the money twice ([ADR-0019](decisions/0019-screen-payments-as-a-gate-in-the-event-pipeline.md)).
+
+It has its own admin API on port 8082 for the review queue, and works out whether a caller is an admin by reading the role out of the token rather than looking anyone up.
+
+### 4. insights-service
 
 Read-only. It searches first, and shows the model only what won.
 

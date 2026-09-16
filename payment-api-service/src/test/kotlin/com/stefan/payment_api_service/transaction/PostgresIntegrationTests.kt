@@ -194,7 +194,11 @@ class PostgresIntegrationTests @Autowired constructor (
     }
 
     @ParameterizedTest
-    @EnumSource(TransactionStatus::class)
+    @EnumSource(
+        value = TransactionStatus::class,
+        names = ["UNDER_REVIEW"],
+        mode = EnumSource.Mode.EXCLUDE,
+    )
     fun `updateTransactionStatus return the right TransactionStatus for each status value`(status: TransactionStatus) {
         val savedTransaction = saveMockTransaction()
 

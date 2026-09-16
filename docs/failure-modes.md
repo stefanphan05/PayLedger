@@ -13,6 +13,7 @@ The short version: the outbox is what makes most of these survivable. A payment 
 | payments-db | none | the API cannot accept anything | requests fail, health check fails |
 | ledger-db | none | messages redeliver until it returns | consumer errors, transactions stay `PENDING` |
 | ledger-service | none | messages wait on the topic | transactions stay `PENDING`, no ledger logs |
+| fraud-service | none | nothing is screened, so nothing clears | transactions stay `PENDING`, no `Screened as` lines |
 | the outbox poller | none | everything is accepted, nothing is sent | the age gauge climbs, no `Published` lines |
 | insights-db or Gemini | none | questions fail | `/insights/ask` errors; payments unaffected |
 
@@ -44,9 +45,23 @@ Nothing fails and nothing settles. Messages accumulate on `payment-events`, and 
 
 Transactions sit at `PENDING` for as long as it is away. There is **no timeout**, a payment does not expire or auto-fail, it simply waits.
 
+## fraud-service is down
+
+Payments are still accepted and nothing settles. Every payment now has to be screened before the ledger sees it, so while the screener is away the whole pipeline stops after the front door.
+
+This is the safe half of the trade and it costs nothing to get. Messages pile up on `payment-events`, and because the consumer records its position per message rather than automatically, screening resumes exactly where it stopped. When it comes back the backlog drains and each payment clears, holds or is refused normally, with no manual step.
+
+Nothing had to be designed for this. There is no timeout to expire, no "allow everything through" fallback, and no decision about whether an unscreened payment should be trusted — the payment simply has not been screened yet, and waits ([ADR-0019](decisions/0019-screen-payments-as-a-gate-in-the-event-pipeline.md)).
+
+Transactions sit at `PENDING`, indistinguishable from a ledger outage from the client's side. To tell them apart, check whether `Screened as` lines are still appearing.
+
+**A word of warning about first starts.** A brand new screener reads the topic from the beginning, so it will screen every payment still retained there and clear them all again. The ledger checks message ids and will not recognise those as repeats, because they are new messages — it would apply every one of those transfers a second time. Start from a clean topic, or move the read position to the end before starting.
+
 ## A database is down
 
 **payments-db**: the API can neither accept nor settle. Requests fail and the container health check goes red, so `docker compose` reports it.
+
+**fraud-db**: screening throws part-way through. The position is not recorded, Kafka redelivers, and it keeps failing until the database returns — at which point it screens normally. Nothing is decided twice, because the decision, the duplicate guard and the outgoing message all commit together or not at all.
 
 **ledger-db**: the listener throws while applying. The offset is not committed, Kafka redelivers, and it keeps failing until the database returns — at which point the message applies normally. `processed_events` means the redelivery cannot double-apply anything that did land.
 
@@ -84,4 +99,4 @@ payledger_outbox_unpublished          # how many are waiting
 payledger_ledger_outcome_total        # what the ledger is deciding, by reason
 ```
 
-[observability.md](observability.md) covers reading these properly.
+[observability.md](features/observability.md) covers reading these properly.

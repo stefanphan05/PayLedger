@@ -1,0 +1,9 @@
+fraud-events:
+  polling-enabled: false
+
+spring:
+  kafka:
+    listener:
+      auto-startup: false
+  jpa:
+    show-sql: false

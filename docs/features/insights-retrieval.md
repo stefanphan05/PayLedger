@@ -2,7 +2,7 @@
 
 How a question in plain English becomes an answer drawn from this project's own logs and documents.
 
-This is the companion to [observability.md](observability.md). That one answers *what happened to this payment* by hand, with `grep`. This one answers the same question by asking, and adds a second one, *why is the system built this way*, from the documents in this repository. The reasoning behind each choice is in [ADR-0014](decisions/0014-python-for-the-insights-service.md) through [ADR-0018](decisions/0018-a-free-model-writes-the-answers.md).
+This is the companion to [observability.md](observability.md). That one answers *what happened to this payment* by hand, with `grep`. This one answers the same question by asking, and adds a second one, *why is the system built this way*, from the documents in this repository. The reasoning behind each choice is in [ADR-0014](../decisions/0014-python-for-the-insights-service.md) through [ADR-0018](../decisions/0018-a-free-model-writes-the-answers.md).
 
 ## The idea in one line
 
@@ -49,7 +49,7 @@ Because a name has no meaning.
 
 "Why optimistic locking?" can be found by comparing meanings, that is exactly what the numbers are for. But `demo-8` is a label. Turning it into numbers produces a list with no significance, and comparing it against `demo-7` measures how the two strings happen to be chopped up, not whether they are related.
 
-The failure that causes is the quiet kind: ask about one payment, get a fluent and confident answer about a different one, with nothing wrong on the surface. So identifiers are pulled out of the question with a pattern and looked up exactly, against indexed columns, and only the rest goes through the meaning-based search. The full argument is in [ADR-0017](decisions/0017-two-kinds-of-search-instead-of-one.md).
+The failure that causes is the quiet kind: ask about one payment, get a fluent and confident answer about a different one, with nothing wrong on the surface. So identifiers are pulled out of the question with a pattern and looked up exactly, against indexed columns, and only the rest goes through the meaning-based search. The full argument is in [ADR-0017](../decisions/0017-two-kinds-of-search-instead-of-one.md).
 
 Every result records which of the two found it, so a silent collapse back to one search is visible rather than merely suspected.
 
@@ -79,7 +79,7 @@ Ingestion empties the table and rebuilds it from scratch each time. Nothing trig
 ## What is deliberately not here
 
 - **No automatic ingestion.** Nothing watches for new payments or edited documents. Re-running it is a manual step, and the service will happily answer from a stale corpus without mentioning it.
-- **No enforced citations.** The `[n]` markers are the model's own claims about where something came from. It can attribute a sentence to source 2 that source 2 does not support, and the answer will look identical to a correct one. Reading the source alongside the answer is the only check. See [ADR-0018](decisions/0018-a-free-model-writes-the-answers.md).
+- **No enforced citations.** The `[n]` markers are the model's own claims about where something came from. It can attribute a sentence to source 2 that source 2 does not support, and the answer will look identical to a correct one. Reading the source alongside the answer is the only check. See [ADR-0018](../decisions/0018-a-free-model-writes-the-answers.md).
 - **No login on the endpoint**, unlike every payments endpoint. Acceptable only because it is local and there is nothing sensitive behind it.
-- **No index on the stored numbers.** At a thousand chunks, checking every row is faster than maintaining one. That stops being true somewhere around a million ([ADR-0015](decisions/0015-search-in-postgres-rather-than-a-dedicated-search-database.md)).
+- **No index on the stored numbers.** At a thousand chunks, checking every row is faster than maintaining one. That stops being true somewhere around a million ([ADR-0015](../decisions/0015-search-in-postgres-rather-than-a-dedicated-search-database.md)).
 - **No re-ranking, and no keyword scoring blended with the meaning-based search.** Both are standard next steps, and both are unnecessary at this size.

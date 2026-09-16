@@ -1,0 +1,82 @@
+spring:
+  application:
+    name: fraud-service
+  config:
+    import: "optional:file:.env[.properties],optional:file:../.env[.properties]"
+  datasource:
+    url: ${FRAUD_DB_URL}
+    username: ${FRAUD_DB_USERNAME}
+    password: ${FRAUD_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    # Same reason as ledger-service: the outbox poller runs every second whether or
+    # not there is anything to send, and its SELECT would bury every other log line.
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Its own group. This is the whole point: a second reader of payment-events
+      # that payment-api neither knows about nor waits for.
+      group-id: fraud-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        max.block.ms: 1000
+
+payment-events:
+  topic: payment-events
+
+fraud-events:
+  topic: fraud-events
+  partitions: 3
+  poll-interval: 1s
+  batch-size: 100
+  send-timeout: 5s
+
+fraud:
+  block-threshold: 70
+  review-threshold: 40
+  rules:
+    velocity:
+      window: 60s
+      max-payments: 5
+      weight: 40
+    amount-ceiling:
+      limit: 10000
+      weight: 40
+    amount-anomaly:
+      window: 30d
+      multiplier: 10
+      minimum-history: 5
+      weight: 25
+    new-recipient-large:
+      minimum-amount: 1000
+      weight: 30
+    fan-out:
+      window: 10m
+      max-recipients: 4
+      weight: 35
+
+jwt:
+  secret: ${JWT_SECRET}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}

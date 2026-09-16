@@ -2,7 +2,7 @@
 
 How to find out what happened to one payment, and how to tell when the system is quietly falling behind.
 
-This is the companion to [architecture.md](architecture.md): that diagram shows what moves, this one shows what you can see while it moves. The reasoning behind each choice is in [ADR-0011](decisions/0011-carry-the-correlation-id-in-a-kafka-header.md), [ADR-0012](decisions/0012-log-as-json-in-containers-only.md) and [ADR-0013](decisions/0013-watch-the-outbox-backlog-age.md).
+This is the companion to [architecture.md](../architecture.md): that diagram shows what moves, this one shows what you can see while it moves. The reasoning behind each choice is in [ADR-0011](../decisions/0011-carry-the-correlation-id-in-a-kafka-header.md), [ADR-0012](../decisions/0012-log-as-json-in-containers-only.md) and [ADR-0013](../decisions/0013-watch-the-outbox-backlog-age.md).
 
 ## Why the id has to be stored, not remembered
 
@@ -16,12 +16,25 @@ Two ids, answering two different questions.
 
 | Field | Question it answers | Where it is set |
 |---|---|---|
-| `correlationId` | What happened during this one flow? | `CorrelationIdFilter` at the HTTP edge; re-established from the record header in both Kafka listeners |
-| `transactionId` | Everything that ever happened to this payment | `TransactionService` on create and settle; both listeners once the message is parsed |
+| `correlationId` | What happened during this one flow? | `CorrelationIdFilter` at the HTTP edge; re-established from the record header in every Kafka listener |
+| `transactionId` | Everything that ever happened to this payment | `TransactionService` on create and settle; every listener once the message is parsed |
 
 Both are put on the logging context rather than passed into individual log calls, so every line in scope carries them without the call site knowing. In containers the lines are written as JSON and the two ids appear as fields; on your machine the console stays plain and readable.
 
 `correlationId` accepts a client-supplied value on the request. It is checked first, letters, digits, dash and underscore, 64 characters at most — because it arrives from outside and ends up both in the log stream and in a database column. Anything else is replaced with a freshly generated id rather than rejected.
+
+One flow now spans **three** services, not two. A payment is accepted by `payment-api-service`, screened by `fraud-service`, and settled by `ledger-service`, and all three log under the same correlation id — the screener reads it from the incoming record header and copies it onto the message it publishes, so the chain is unbroken.
+
+An admin overturning a held payment is the one place this could have broken. That is an HTTP request, so it would naturally get a fresh id. Instead the original is stored on the decision row and put back on the logging context for the override, so "held at 14:32" and "released at 14:41" stay part of the same flow rather than becoming two unrelated ones.
+
+The line worth knowing is the screener's verdict, because it carries the whole decision in its message:
+
+```
+Screened as BLOCK, score 70/100, rules: AMOUNT_CEILING (500000 AUD over 10000),
+NEW_RECIPIENT_LARGE (first to this recipient, 500000 AUD)
+```
+
+Everything is in the message text on purpose. The log reader that feeds `insights-service` keeps only the message and the two ids, so a number stored as a separate field would never reach an answer.
 
 ## Debugging an incident
 
@@ -76,6 +89,6 @@ Almost all of it is the first gap, and that is the outbox poller's one-second in
 
 - **No log aggregator.** Two containers and `grep` is enough at this size. A shipper and a search backend is a lot of infrastructure to answer a question `docker compose logs` already answers.
 - **No alerting rules.** The measurements exist and the failure is visible, but nothing raises an alarm, someone has to look. The obvious first rule is `payledger_outbox_oldest_age_seconds` staying above a minute.
-- **No distributed tracing.** No spans, no timing breakdown within a service. The correlation id answers "what happened", not "where did the time go". [ADR-0011](decisions/0011-carry-the-correlation-id-in-a-kafka-header.md) covers when that would be worth adding.
+- **No distributed tracing.** No spans, no timing breakdown within a service. The correlation id answers "what happened", not "where did the time go". [ADR-0011](../decisions/0011-carry-the-correlation-id-in-a-kafka-header.md) covers when that would be worth adding.
 - **Retry and drop logs carry no id.** When a message cannot be read at all, the retries and the eventual giving-up are logged by the messaging framework, outside any code of ours, so they are the one part of a payment's history with nothing to search for. Feature 08's dead letter topic is where that gets fixed.
 - **The measurement endpoints have no login.** Fine while they are only reachable on the private network between containers. Exposing them publicly would need that revisited.

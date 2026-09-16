@@ -1,0 +1,47 @@
+package com.stefan.fraud_service.outbox.model
+
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
+import jakarta.persistence.Id
+import jakarta.persistence.Table
+import org.hibernate.annotations.CreationTimestamp
+import java.time.Instant
+import java.util.UUID
+
+@Entity
+@Table(name = "outbox_events")
+class OutboxEvent(
+    @Column(name = "transaction_id", nullable = false, updatable = false)
+    val transactionId: UUID,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "event_type", nullable = false, length = 50, updatable = false)
+    val eventType: FraudEventType,
+
+    @Column(name = "payload", nullable = false, updatable = false)
+    val payload: String,
+
+    /**
+     * The flow that produced this event. Copied onto the Kafka record as a header, so
+     * one log search spans both services. Deliberately not part of the event contract -
+     * see ADR-0011.
+     */
+    @Column(name = "correlation_id", nullable = false, length = 64, updatable = false)
+    val correlationId: String,
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id", nullable = false, updatable = false)
+    val id: Long = 0,
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    val createdAt: Instant? = null,
+
+    @Column(name = "published_at")
+    var publishedAt: Instant? = null,
+)

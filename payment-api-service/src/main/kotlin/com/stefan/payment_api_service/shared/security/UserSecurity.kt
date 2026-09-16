@@ -19,4 +19,8 @@ class UserSecurity(
     override fun isEnabled() = true
 
     fun isAdmin(): Boolean = userAuthorities.any { it.authority == "ROLE_ADMIN" }
+
+    fun roleName(): Set<String> = userAuthorities
+        .map { it.authority!!.removePrefix("ROLE_") }
+        .toSet()
 }

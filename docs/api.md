@@ -1,10 +1,11 @@
 # PayLedger API Reference
 
-Two services expose HTTP. 
+Three services expose HTTP. 
 
 | Service | Base URL (local) | Auth |
 |---|---|---|
 | `payment-api-service` | `http://localhost:8080` | JWT bearer token on every endpoint |
+| `fraud-service` | `http://localhost:8082` | JWT bearer token, admin only |
 | `insights-service` | `http://localhost:8000` | None |
 
 - **Content type:** `application/json` on requests; `application/json` on success and `application/problem+json` on errors.
@@ -36,7 +37,7 @@ It is optional. When absent, or when the supplied value is rejected, the service
 An accepted id is 1–64 characters of letters, digits, `-` and `_`. Anything outside
 that (whitespace, punctuation, newlines, or an over-long value) is **replaced with a generated id rather than rejected**, a bad correlation id never fails a request. The constraint exists because the value is written to logs and to a database column.
 
-Given an id, `docker compose logs | grep <id>` returns every log line both services produced for that payment, in order. See [observability.md](observability.md).
+Given an id, `docker compose logs | grep <id>` returns every log line both services produced for that payment, in order. See [observability.md](features/observability.md).
 
 ## Error format
 
@@ -369,7 +370,7 @@ Returns `200`, not an error, because an empty corpus is a state rather than a fa
 ```
 
 Run the ingestion step and ask again — see
-[insights-retrieval.md](insights-retrieval.md).
+[insights-retrieval.md](features/insights-retrieval.md).
 
 **Errors**
 
@@ -384,17 +385,56 @@ that was. If an answer about a recent payment looks wrong, check that first.
 
 ---
 
+## fraud-service endpoints
+
+All four require an admin token and live on `http://localhost:8082`. See [fraud-detection.md](features/fraud-detection.md) for what the decisions mean.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/fraud/decisions?decision=&senderId=&page=&size=` | Decisions, newest first. `?decision=REVIEW` is the review queue |
+| GET | `/fraud/decisions/{transactionId}` | One decision and the rules that fired |
+| POST | `/fraud/decisions/{transactionId}/release` | Let a held payment through |
+| POST | `/fraud/decisions/{transactionId}/reject` | Refuse a held payment |
+
+```jsonc
+// GET /fraud/decisions/{transactionId}
+{
+  "transactionId": "3f2a8c41-9d15-4e77-b0aa-1c6e5b902f3a",
+  "senderId": "a1b2c3d4-0000-4000-8000-000000000001",
+  "recipientId": "a1b2c3d4-0000-4000-8000-000000000002",
+  "amount": "500000.0000",
+  "currency": "AUD",
+  "screenedAt": "2026-09-16T04:32:04.881Z",
+  "correlationId": "demo-8",
+  "decision": "BLOCK",
+  "score": 70,
+  "triggeredRules": [
+    { "rule": "AMOUNT_CEILING",      "weight": 40, "detail": "500000 AUD over 10000" },
+    { "rule": "NEW_RECIPIENT_LARGE", "weight": 30, "detail": "first to this recipient, 500000 AUD" }
+  ],
+  "overriddenAt": null,
+  "overriddenTo": null
+}
+```
+
+`correlationId` is returned so you can ask `insights-service` about the payment — it is the id the whole flow is recorded under.
+
+**Errors.** `404` if the payment was never screened. `409` on release or reject if the decision is not awaiting review, or has already been overturned — which is what stops a double-click clearing a payment twice.
+
 ## Reference
 
 ### Transaction status
 
 | Status | Meaning |
 |---|---|
-| `PENDING` | Accepted and queued; `ledger-service` has not posted it yet |
+| `PENDING` | Accepted and queued; nothing has posted it yet |
+| `UNDER_REVIEW` | Held by fraud screening. Waiting for an admin to release or reject it |
 | `COMPLETED` | Funds moved and the double-entry posting committed |
-| `FAILED` | Rejected by the ledger (e.g. insufficient funds) |
+| `FAILED` | Rejected by the ledger, or refused by fraud screening |
 
-`PENDING` is the only status `POST /transactions` ever returns.
+`PENDING` is the only status `POST /transactions` ever returns. A payment refused by fraud screening becomes `FAILED` with `failureReason: "FRAUD_BLOCKED"`, the same shape as a ledger rejection.
+
+`UNDER_REVIEW` cannot be set by hand through `PATCH /transactions/{id}/status`; it is a screening outcome, and a payment put there by hand could never be released.
 
 ### Roles
 
