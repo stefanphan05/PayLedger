@@ -9,6 +9,8 @@ import com.stefan.payment_api_service.idempotency.service.RequestHasher
 import com.stefan.payment_api_service.shared.security.UserSecurity
 import com.stefan.payment_api_service.idempotency.service.IdempotencyService
 import com.stefan.payment_api_service.idempotency.service.IdempotencyService.Companion.HEADER_IDEMPOTENCY_KEY
+import com.stefan.payment_api_service.transaction.model.DepositRequestDTO
+import com.stefan.payment_api_service.transaction.model.WithdrawalRequestDTO
 import com.stefan.payment_api_service.transaction.service.TransactionService
 import jakarta.validation.Valid
 import org.springframework.data.domain.Pageable
@@ -115,5 +117,70 @@ class TransactionController(
     ): ResponseEntity<TransactionResponseDTO> {
         val transaction = transactionService.updateTransactionStatus(transactionId, updateTransactionStatusDTO.status)
         return ResponseEntity.ok(TransactionResponseDTO.from(transaction))
+    }
+
+    /**
+     * Puts money into a user's wallet. **Requires the `ADMIN` role.**
+     *
+     * Requires an `Idempotency-Key` on the same terms as `POST /transactions` -
+     * a double-clicked deposit must not credit the wallet twice. Returns before
+     * the money moves; poll `GET /transactions/{id}` for the outcome.
+     *
+     * @return 201 with the transaction; 201 + `Idempotent-Replay` when replayed
+     * @throws RecipientNotFoundException 404, no such user
+     * @throws InvalidIdempotencyKeyException 400, key missing or malformed
+     * @throws IdempotencyKeyReuseException 422, key reused with a different body
+     * @throws IdempotencyConflictException 409, an earlier request is still in flight
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/deposits")
+    fun createDeposit(
+        @RequestHeader(HEADER_IDEMPOTENCY_KEY) idempotencyKeyHeader: String,
+        @RequestBody @Valid depositRequestDTO: DepositRequestDTO,
+        @AuthenticationPrincipal principal: UserSecurity
+    ): ResponseEntity<TransactionResponseDTO> {
+        val idempotencyKey = IdempotencyKeyDTO(idempotencyKeyHeader)
+
+        return idempotencyService.execute(
+            userId = principal.id,
+            key = idempotencyKey.value,
+            requestHash = requestHasher.hash(depositRequestDTO),
+            responseType = TransactionResponseDTO::class.java,
+        ) {
+            val transaction = transactionService.createDeposit(depositRequestDTO, principal.id)
+            ResponseEntity.status(HttpStatus.CREATED).body(TransactionResponseDTO.from(transaction))
+        }
+    }
+
+    /**
+     * Takes money out of the authenticated user's own wallet. The payer is
+     * always taken from the token - there is no field for it in the body.
+     *
+     * Requires an `Idempotency-Key`, as above. Whether the balance covers it is
+     * decided by `ledger-service`, not here, so an overdrawn withdrawal still
+     * returns `PENDING` and settles as `FAILED` with `INSUFFICIENT_FUNDS`.
+     *
+     * @return 201 with the transaction; 201 + `Idempotent-Replay` when replayed
+     * @throws InvalidIdempotencyKeyException 400, key missing or malformed
+     * @throws IdempotencyKeyReuseException 422, key reused with a different body
+     * @throws IdempotencyConflictException 409, an earlier request is still in flight
+     */
+    @PostMapping("/withdrawals")
+    fun createWithdrawal(
+        @RequestHeader(HEADER_IDEMPOTENCY_KEY) idempotencyKeyHeader: String,
+        @RequestBody @Valid withdrawalRequestDTO: WithdrawalRequestDTO,
+        @AuthenticationPrincipal principal: UserSecurity
+    ): ResponseEntity<TransactionResponseDTO> {
+        val idempotencyKey = IdempotencyKeyDTO(idempotencyKeyHeader)
+
+        return idempotencyService.execute(
+            userId = principal.id,
+            key = idempotencyKey.value,
+            requestHash = requestHasher.hash(withdrawalRequestDTO),
+            responseType = TransactionResponseDTO::class.java,
+        ) {
+            val transaction = transactionService.createWithdrawal(withdrawalRequestDTO, principal.id)
+            ResponseEntity.status(HttpStatus.CREATED).body(TransactionResponseDTO.from(transaction))
+        }
     }
 }

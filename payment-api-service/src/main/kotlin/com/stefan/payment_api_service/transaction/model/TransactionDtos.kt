@@ -34,6 +34,44 @@ data class TransactionRequestDTO(
         ).joinToString("|")
 }
 
+data class DepositRequestDTO(
+    @field:NotNull(message = "Amount is required")
+    @field:DecimalMin(value = "0.01", message = "Amount must be greater than zero")
+    @field:Digits(integer = 15, fraction = 4, message = "Amount has too many digits")
+    val amount: BigDecimal,
+
+    @field:NotBlank(message = "Currency code is required")
+    @field:Pattern(regexp = "^[A-Z]{3}$", message = "Currency code must be a 3-letter ISO 4217 code (e.g. USD)")
+    val currencyCode: String,
+
+    @field:NotNull(message = "UserID is required")
+    val userId: UUID,
+) : IdempotentRequest {
+    override fun canonicalForm(): String =
+        listOf(
+            amount.stripTrailingZeros().toPlainString(),
+            currencyCode,
+            userId.toString(),
+        ).joinToString("|")
+}
+
+data class WithdrawalRequestDTO(
+    @field:NotNull(message = "Amount is required")
+    @field:DecimalMin(value = "0.01", message = "Amount must be greater than zero")
+    @field:Digits(integer = 15, fraction = 4, message = "Amount has too many digits")
+    val amount: BigDecimal,
+
+    @field:NotBlank(message = "Currency code is required")
+    @field:Pattern(regexp = "^[A-Z]{3}$", message = "Currency code must be a 3-letter ISO 4217 code (e.g. USD)")
+    val currencyCode: String,
+) : IdempotentRequest {
+    override fun canonicalForm(): String =
+        listOf(
+            amount.stripTrailingZeros().toPlainString(),
+            currencyCode,
+        ).joinToString("|")
+}
+
 data class UpdateTransactionStatusDTO(
     @field:NotNull("Status is required")
     val status: TransactionStatus,
@@ -46,9 +84,12 @@ data class TransactionResponseDTO(
     val amount: BigDecimal,
 
     val currency: String,
+    val type: TransactionType,
     val status: TransactionStatus,
-    val senderId: UUID,
-    val recipientId: UUID,
+
+    val senderId: UUID?,
+    val recipientId: UUID?,
+
     val createdAt: Instant?,
     val failureReason: String?,
 ) {
@@ -58,6 +99,7 @@ data class TransactionResponseDTO(
                 id = transaction.id,
                 amount = transaction.amount,
                 currency = transaction.currency,
+                type = transaction.type,
                 status = transaction.transactionStatus,
                 senderId = transaction.senderId,
                 recipientId = transaction.recipientId,

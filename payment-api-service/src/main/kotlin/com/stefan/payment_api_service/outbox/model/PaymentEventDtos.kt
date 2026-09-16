@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat
 import com.stefan.payment_api_service.transaction.model.Transaction
 import com.stefan.payment_api_service.outbox.model.PaymentEventType
 import com.stefan.payment_api_service.transaction.model.TransactionStatus
+import com.stefan.payment_api_service.transaction.model.TransactionType
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
@@ -21,9 +22,11 @@ data class PaymentEventPayload(
     val amount: BigDecimal,
 
     val currency: String,
+    val type: TransactionType,
     val status: TransactionStatus,
-    val senderId: UUID,
-    val recipientId: UUID,
+
+    val senderId: UUID?,
+    val recipientId: UUID?,
     val createdAt: Instant?,
 ) {
     companion object {
@@ -31,6 +34,7 @@ data class PaymentEventPayload(
             transactionId = transaction.id,
             amount = transaction.amount,
             currency = transaction.currency,
+            type = transaction.type,
             status = transaction.transactionStatus,
             senderId = transaction.senderId,
             recipientId = transaction.recipientId,

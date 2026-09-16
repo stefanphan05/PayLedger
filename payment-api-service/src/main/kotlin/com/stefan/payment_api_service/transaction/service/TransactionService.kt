@@ -13,10 +13,13 @@ import com.stefan.payment_api_service.outbox.service.PaymentEventPublisher
 import com.stefan.payment_api_service.outbox.model.PaymentEventType
 import com.stefan.payment_api_service.shared.observability.LogContext
 import com.stefan.payment_api_service.shared.security.UserSecurity
+import com.stefan.payment_api_service.transaction.model.DepositRequestDTO
 import com.stefan.payment_api_service.transaction.model.Transaction
 import com.stefan.payment_api_service.transaction.repository.TransactionRepository
 import com.stefan.payment_api_service.transaction.model.TransactionRequestDTO
 import com.stefan.payment_api_service.transaction.model.TransactionStatus
+import com.stefan.payment_api_service.transaction.model.TransactionType
+import com.stefan.payment_api_service.transaction.model.WithdrawalRequestDTO
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.util.UUID
@@ -166,6 +169,62 @@ class TransactionService(
             paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
 
             logger.info("Fraud screening moved this payment to {}", verdict.newStatus)
+
+            return savedTransaction
+        }
+    }
+
+    @Transactional
+    fun createDeposit(depositRequestDTO: DepositRequestDTO, performedBy: UUID): Transaction {
+        if (!userRepository.existsById(depositRequestDTO.userId)) {
+            throw RecipientNotFoundException(depositRequestDTO.userId)
+        }
+
+        val transaction = Transaction(
+            amount = depositRequestDTO.amount,
+            currency = depositRequestDTO.currencyCode,
+            type = TransactionType.DEPOSIT,
+            transactionStatus = TransactionStatus.PENDING,
+            senderId = null,
+            recipientId = depositRequestDTO.userId,
+        )
+
+        MDC.putCloseable(LogContext.TRANSACTION_ID, transaction.id.toString()).use {
+            val savedTransaction = repository.saveAndFlush(transaction)
+            paymentEventPublisher.publish(PaymentEventType.PAYMENT_INITIATED, savedTransaction)
+            logger.info(
+                "Accepted deposit of {} {} into {}, requested by {}",
+                savedTransaction.amount,
+                savedTransaction.currency,
+                savedTransaction.recipientId,
+                performedBy,
+            )
+
+            return savedTransaction
+        }
+    }
+
+    @Transactional
+    fun createWithdrawal(withdrawalRequestDTO: WithdrawalRequestDTO, senderId: UUID): Transaction {
+        val transaction = Transaction(
+            amount = withdrawalRequestDTO.amount,
+            currency = withdrawalRequestDTO.currencyCode,
+            type = TransactionType.WITHDRAWAL,
+            transactionStatus = TransactionStatus.PENDING,
+            senderId = senderId,
+            recipientId = null,
+        )
+
+        MDC.putCloseable(LogContext.TRANSACTION_ID, transaction.id.toString()).use {
+            val savedTransaction = repository.saveAndFlush(transaction)
+            paymentEventPublisher.publish(PaymentEventType.PAYMENT_INITIATED, savedTransaction)
+
+            logger.info(
+                "Accepted withdrawal of {} {} from {}",
+                savedTransaction.amount,
+                savedTransaction.currency,
+                senderId,
+            )
 
             return savedTransaction
         }
