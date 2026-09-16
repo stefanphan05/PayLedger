@@ -201,6 +201,7 @@ curl -X POST http://localhost:8080/transactions \
   "id": "d41f0c88-...",
   "amount": "15.00",
   "currency": "USD",
+  "type": "TRANSFER",
   "status": "PENDING",
   "senderId": "3f1b7a2e-...",
   "recipientId": "9c2d5b10-...",
@@ -209,11 +210,16 @@ curl -X POST http://localhost:8080/transactions \
 }
 ```
 
+`type` is `TRANSFER` here. It is `DEPOSIT` or `WITHDRAWAL` for the two endpoints
+below, and on those **one of `senderId` and `recipientId` is `null`** — the other
+side is the platform, not a user. Parse both as nullable.
+
 `amount` is serialised as a **JSON string** to avoid float rounding; parse it with a
 decimal type, not a double.
 
 `failureReason` is `null` unless `status` is `FAILED`, and is free text — treat it as a message to show, not a code to branch on. Today `ledger-service` sends
-`INSUFFICIENT_FUNDS`, `CURRENCY_MISMATCH` or `SELF_TRANSFER`, and may add more.
+`INSUFFICIENT_FUNDS`, `CURRENCY_MISMATCH`, `SELF_TRANSFER`, `NO_FUNDING_ACCOUNT` or
+`FUNDING_ACCOUNT_SHORT`, and may add more. Fraud screening sends `FRAUD_BLOCKED`.
 
 ### Idempotency
 
@@ -265,6 +271,9 @@ usually settles within a few seconds, once `ledger-service` has posted it and th
 Lists transactions where the authenticated user is sender **or** recipient. Admins
 get their own transactions here, not everyone's.
 
+Deposits and withdrawals appear here too, next to transfers. A deposit has the user
+as recipient and no sender; a withdrawal has them as sender and no recipient.
+
 **Query parameters**
 
 | Param | Default | Notes |
@@ -282,13 +291,151 @@ curl "http://localhost:8080/transactions?page=0&size=20&sort=createdAt,desc" \
 
 ```json
 {
-  "content": [ { "id": "d41f0c88-...", "amount": "15.00", "currency": "USD", "status": "COMPLETED", "senderId": "3f1b7a2e-...", "recipientId": "9c2d5b10-...", "createdAt": "2026-09-08T10:22:04Z" } ],
+  "content": [ { "id": "d41f0c88-...", "amount": "15.00", "currency": "USD", "type": "TRANSFER", "status": "COMPLETED", "senderId": "3f1b7a2e-...", "recipientId": "9c2d5b10-...", "createdAt": "2026-09-08T10:22:04Z" } ],
   "page": 0,
   "size": 20,
   "totalElements": 1,
   "totalPages": 1
 }
 ```
+
+---
+
+## `POST /transactions/deposits`
+
+Puts money into a user's wallet. **Requires the `ADMIN` role.**
+
+There is no card or bank provider behind this. A deposit creates money, so an
+operator asks for it rather than a user helping themselves. The `userId` is the
+account being funded — it is not the caller.
+
+Like `POST /transactions`, this returns **before the money moves**: `PENDING`
+immediately, then `COMPLETED` a moment later once `ledger-service` has posted it.
+
+Deposits are **not** screened for fraud. A deposit has no sender — the money came
+from outside — and every rule asks what one sender has been doing recently, so there
+is nobody to ask about. Treating every deposit in the system as the same absent
+sender would trip the speed and spread rules for everyone. See
+[fraud-detection.md](features/fraud-detection.md).
+
+**Headers**
+
+| Header | Required | Notes |
+|---|---|---|
+| `Idempotency-Key` | yes | Same rules as `POST /transactions`. A double-clicked deposit must not credit the wallet twice. |
+
+**Request**
+
+| Field | Type | Constraints |
+|---|---|---|
+| `amount` | decimal | required, ≥ 0.01, ≤ 15 integer and 4 fractional digits |
+| `currencyCode` | string | required, 3 uppercase letters (ISO 4217) |
+| `userId` | UUID | required, must exist — the user being paid |
+
+```bash
+curl -X POST http://localhost:8080/transactions/deposits \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: payroll-2026-09-16-ada' \
+  -d '{"amount":"1000.00","currencyCode":"AUD","userId":"9c2d5b10-..."}'
+```
+
+**`201 Created`**
+
+```json
+{
+  "id": "b7e40a19-...",
+  "amount": "1000.00",
+  "currency": "AUD",
+  "type": "DEPOSIT",
+  "status": "PENDING",
+  "senderId": null,
+  "recipientId": "9c2d5b10-...",
+  "createdAt": "2026-09-16T04:12:30Z",
+  "failureReason": null
+}
+```
+
+`senderId` is `null` because the money came from outside the system.
+
+**Errors**
+
+| Status | Title | When |
+|---|---|---|
+| 400 | Validation Error / Missing Header | Body fails validation, or `Idempotency-Key` is absent or malformed |
+| 403 | Forbidden | Caller is not an admin |
+| 404 | Recipient Not Found | `userId` matches no user |
+| 409 | Request In Progress | An earlier request with this key is still running |
+| 422 | Idempotency Key Reused | This key was already used with a different body |
+
+A deposit in a currency the platform holds no cash in settles as `FAILED` with
+`failureReason: "NO_FUNDING_ACCOUNT"` — it is accepted, then refused by the ledger.
+Today that means anything other than AUD or USD.
+
+---
+
+## `POST /transactions/withdrawals`
+
+Takes money out of the authenticated user's own wallet. Any authenticated user; the
+payer is always taken from the token, so there is no field for it in the body.
+
+Whether the balance covers it is decided by `ledger-service`, not here. An overdrawn
+withdrawal still returns `PENDING` and settles as `FAILED` with
+`INSUFFICIENT_FUNDS`, exactly like a transfer that cannot be afforded.
+
+Withdrawals **are** screened for fraud. This is money leaving the system, so it is
+the flow the velocity and amount rules matter most on. `NEW_RECIPIENT_LARGE` and
+`FAN_OUT` cannot fire, because there is no recipient to be new or to fan out to.
+
+**Headers**
+
+| Header | Required | Notes |
+|---|---|---|
+| `Idempotency-Key` | yes | Same rules as `POST /transactions` |
+
+**Request**
+
+| Field | Type | Constraints |
+|---|---|---|
+| `amount` | decimal | required, ≥ 0.01, ≤ 15 integer and 4 fractional digits |
+| `currencyCode` | string | required, 3 uppercase letters (ISO 4217) |
+
+```bash
+curl -X POST http://localhost:8080/transactions/withdrawals \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: cashout-91' \
+  -d '{"amount":"200.00","currencyCode":"AUD"}'
+```
+
+**`201 Created`**
+
+```json
+{
+  "id": "0c9a7742-...",
+  "amount": "200.00",
+  "currency": "AUD",
+  "type": "WITHDRAWAL",
+  "status": "PENDING",
+  "senderId": "3f1b7a2e-...",
+  "recipientId": null,
+  "createdAt": "2026-09-16T04:20:11Z",
+  "failureReason": null
+}
+```
+
+`recipientId` is `null` because the money left the system.
+
+**Errors**
+
+| Status | Title | When |
+|---|---|---|
+| 400 | Validation Error / Missing Header | Body fails validation, or `Idempotency-Key` is absent or malformed |
+| 409 | Request In Progress | An earlier request with this key is still running |
+| 422 | Idempotency Key Reused | This key was already used with a different body |
+
+Not having the money is not an error here. It is a `201` followed by a `FAILED`
+status, the same as any other payment the ledger refuses.
 
 ---
 
@@ -417,11 +564,25 @@ All four require an admin token and live on `http://localhost:8082`. See [fraud-
 }
 ```
 
+`recipientId` is `null` on a withdrawal, which has no recipient. Deposits never
+appear here at all — they are not screened.
+
 `correlationId` is returned so you can ask `insights-service` about the payment — it is the id the whole flow is recorded under.
 
 **Errors.** `404` if the payment was never screened. `409` on release or reject if the decision is not awaiting review, or has already been overturned — which is what stops a double-click clearing a payment twice.
 
 ## Reference
+
+### Transaction type
+
+| Type | Meaning | Empty party |
+|---|---|---|
+| `TRANSFER` | One user pays another | neither |
+| `DEPOSIT` | Money entering the system, into a user's wallet | `senderId` |
+| `WITHDRAWAL` | Money leaving the system, out of a user's wallet | `recipientId` |
+
+The empty side is the platform's own account, which lives in `ledger-db` and is not
+a user, so there is no id to hand back for it.
 
 ### Transaction status
 
