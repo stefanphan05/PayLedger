@@ -16,12 +16,25 @@ Two ids, answering two different questions.
 
 | Field | Question it answers | Where it is set |
 |---|---|---|
-| `correlationId` | What happened during this one flow? | `CorrelationIdFilter` at the HTTP edge; re-established from the record header in both Kafka listeners |
-| `transactionId` | Everything that ever happened to this payment | `TransactionService` on create and settle; both listeners once the message is parsed |
+| `correlationId` | What happened during this one flow? | `CorrelationIdFilter` at the HTTP edge; re-established from the record header in every Kafka listener |
+| `transactionId` | Everything that ever happened to this payment | `TransactionService` on create and settle; every listener once the message is parsed |
 
 Both are put on the logging context rather than passed into individual log calls, so every line in scope carries them without the call site knowing. In containers the lines are written as JSON and the two ids appear as fields; on your machine the console stays plain and readable.
 
 `correlationId` accepts a client-supplied value on the request. It is checked first, letters, digits, dash and underscore, 64 characters at most — because it arrives from outside and ends up both in the log stream and in a database column. Anything else is replaced with a freshly generated id rather than rejected.
+
+One flow now spans **three** services, not two. A payment is accepted by `payment-api-service`, screened by `fraud-service`, and settled by `ledger-service`, and all three log under the same correlation id — the screener reads it from the incoming record header and copies it onto the message it publishes, so the chain is unbroken.
+
+An admin overturning a held payment is the one place this could have broken. That is an HTTP request, so it would naturally get a fresh id. Instead the original is stored on the decision row and put back on the logging context for the override, so "held at 14:32" and "released at 14:41" stay part of the same flow rather than becoming two unrelated ones.
+
+The line worth knowing is the screener's verdict, because it carries the whole decision in its message:
+
+```
+Screened as BLOCK, score 70/100, rules: AMOUNT_CEILING (500000 AUD over 10000),
+NEW_RECIPIENT_LARGE (first to this recipient, 500000 AUD)
+```
+
+Everything is in the message text on purpose. The log reader that feeds `insights-service` keeps only the message and the two ids, so a number stored as a separate field would never reach an answer.
 
 ## Debugging an incident
 
