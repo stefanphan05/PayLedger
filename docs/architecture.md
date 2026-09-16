@@ -154,19 +154,28 @@ Everything commits together or not at all. `processed_events` is why the same me
 
 It has no user directory. An unknown account id means *not seen yet*, not invalid, so it opens a wallet at zero, and the payment that created it is then rejected for insufficient funds.
 
-Three things reject a payment ([ADR-0009](decisions/0009-store-the-rejection-reason-as-opaque-text.md)):
+It works out which two accounts a payment touches from its type. A transfer moves
+between two wallets. A deposit and a withdrawal have the platform's own cash account
+on one side, which the ledger finds by currency — the sender who asked never names
+it ([ADR-0023](decisions/0023-one-transactions-table-for-money-in-and-out.md)).
+
+Five things reject a payment ([ADR-0009](decisions/0009-store-the-rejection-reason-as-opaque-text.md)):
 
 - `CURRENCY_MISMATCH`
 - `SELF_TRANSFER`
 - `INSUFFICIENT_FUNDS`
+- `NO_FUNDING_ACCOUNT` — a deposit or withdrawal in a currency the platform holds no cash in
+- `FUNDING_ACCOUNT_SHORT` — the float cannot cover a withdrawal, which should never happen
 
-All three still publish an event, a refusal is an answer, and the `payment-api-service` is holding a `PENDING` row waiting for one.
+All of them still publish an event, a refusal is an answer, and the `payment-api-service` is holding a `PENDING` row waiting for one.
 
 ### 3. fraud-service
 
 No public API for payments. It reads `payment-events`, decides, and publishes to `fraud-events`. Nothing calls it and nothing waits on it, so if it is down payments are still accepted and simply wait on the topic.
 
 Five rules score a payment out of 100: how fast the sender is paying, how large the amount is, how it compares to their own average, whether the recipient is new, and how many different people they have paid. Below 40 the payment clears, 40 to 69 holds it for a person, 70 or more refuses it ([ADR-0021](decisions/0021-a-weighted-rule-score-instead-of-a-model.md)).
+
+Deposits are the exception: they are cleared on sight, without the rules running and without a decision being recorded. A deposit has no sender, and every rule asks what one sender has been doing recently, so there is nobody to ask about. There is also nothing to catch — these rules look for an account being emptied, and a deposit is the opposite.
 
 The duplicate guard matters more here than anywhere else. A redelivered message would produce a *second* cleared message with a new id, and the ledger, which checks ids, would not recognise it as a repeat and would move the money twice ([ADR-0019](decisions/0019-screen-payments-as-a-gate-in-the-event-pipeline.md)).
 
