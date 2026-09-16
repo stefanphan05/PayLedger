@@ -36,77 +36,69 @@ class LedgerService(
         markEventProcessed(envelope)
 
         val payment = envelope.payload
-        val sender = walletFor(payment.senderId, payment.currency)
-        val recipient = walletFor(payment.recipientId, payment.currency)
 
-        // validate the transaction
-        val rejection = validateTransfer(sender, recipient, payment)
-        if (rejection != null) {
-            ledgerEvents.publish(LedgerEventType.PAYMENT_FAILED, payment.transactionId, rejection)
-            return LedgerOutcome.Rejected(rejection)
+        return when (val accounts = accountsFor(payment)) {
+            is PaymentAccounts.CouldNotFind -> refuse(payment, accounts.reason)
+            is PaymentAccounts.Found -> post(payment, accounts)
         }
-
-        recordTransfer(sender, recipient, payment)
-        ledgerEvents.publish(LedgerEventType.PAYMENT_COMPLETED, payment.transactionId)
-        return LedgerOutcome.Applied
     }
 
-    private fun markEventProcessed(envelope: PaymentEventEnvelope) {
-        processedEvents.record(envelope.eventId, envelope.transactionId)
+    // ---------------------------------------------------------------- accounts
+    private sealed interface PaymentAccounts {
+        data class Found(val debited: Account, val credited: Account) : PaymentAccounts
+        data class CouldNotFind(val reason: RejectionReason) : PaymentAccounts
     }
 
-    private fun validateTransfer(
-        sender: Account,
-        recipient: Account,
-        payment: PaymentEventPayload
-    ): RejectionReason? {
-        if (sender.currency != payment.currency || recipient.currency != payment.currency) {
-            return RejectionReason.CURRENCY_MISMATCH
-        }
-        if (sender.id == recipient.id) {
-            return RejectionReason.SELF_TRANSFER
-        }
-        if (!sender.canCover(payment.amount)) {
-            return RejectionReason.INSUFFICIENT_FUNDS
-        }
-
-        return null
+    private fun accountsFor(payment: PaymentEventPayload): PaymentAccounts = when (payment.type) {
+        PaymentEventPayload.DEPOSIT -> depositAccounts(payment)
+        PaymentEventPayload.WITHDRAWAL -> withdrawalAccounts(payment)
+        else -> transferAccounts(payment)
     }
 
-    private fun recordTransfer(
-        sender: Account,
-        recipient: Account,
-        payment: PaymentEventPayload
-    ) {
-        entries.saveAll(
-            listOf(
-                LedgerEntry(
-                    transactionId = payment.transactionId,
-                    accountId = sender.id,
-                    direction = EntryDirection.DEBIT,
-                    amount = payment.amount,
-                    currency = payment.currency,
-                ),
-                LedgerEntry(
-                    transactionId = payment.transactionId,
-                    accountId = recipient.id,
-                    direction = EntryDirection.CREDIT,
-                    amount = payment.amount,
-                    currency = payment.currency,
-                ),
-            )
-        )
+    /** One user pays another. Money leaves one wallet and lands in the other. */
+    private fun transferAccounts(payment: PaymentEventPayload): PaymentAccounts {
+        val sender = payment.senderId
+            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
+        val recipient = payment.recipientId
+            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
 
-        sender.applyEntry(
-            EntryDirection.DEBIT,
-            payment.amount
-        )
-
-        recipient.applyEntry(
-            EntryDirection.CREDIT,
-            payment.amount
+        return PaymentAccounts.Found(
+            debited = walletFor(sender, payment.currency),
+            credited = walletFor(recipient, payment.currency),
         )
     }
+
+    /**
+     * Money arriving from outside. The platform now holds more cash, and it owes
+     * more to the user, so both sides go up. Nothing inside the system pays for it.
+     */
+    private fun depositAccounts(payment: PaymentEventPayload): PaymentAccounts {
+        val platformCash = fundingAccountFor(payment.currency)
+            ?: return PaymentAccounts.CouldNotFind(RejectionReason.NO_FUNDING_ACCOUNT)
+        val user = payment.recipientId
+            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
+
+        return PaymentAccounts.Found(
+            debited = platformCash,
+            credited = walletFor(user, payment.currency),
+        )
+    }
+
+    /** Money leaving. The mirror of a deposit: both sides go down. */
+    private fun withdrawalAccounts(payment: PaymentEventPayload): PaymentAccounts {
+        val platformCash = fundingAccountFor(payment.currency)
+            ?: return PaymentAccounts.CouldNotFind(RejectionReason.NO_FUNDING_ACCOUNT)
+        val user = payment.senderId
+            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
+
+        return PaymentAccounts.Found(
+            debited = walletFor(user, payment.currency),
+            credited = platformCash,
+        )
+    }
+
+    private fun fundingAccountFor(currency: String): Account? =
+        accounts.findFirstByAccountClassAndCurrency(AccountClass.ASSET, currency)
 
     /**
      * This service doesn't have user directory, it learns that an account exists only because an event mentioned it
@@ -127,5 +119,87 @@ class LedgerService(
 
         entityManager.persist(account)
         return account
+    }
+
+    // ------------------------------------------------------------- the posting
+
+    private fun post(payment: PaymentEventPayload, accounts: PaymentAccounts.Found): LedgerOutcome {
+        val reason = reasonToRefuse(payment, accounts)
+        if (reason != null) return refuse(payment, reason)
+
+        recordEntries(payment, accounts)
+        ledgerEvents.publish(LedgerEventType.PAYMENT_COMPLETED, payment.transactionId)
+        return LedgerOutcome.Applied
+    }
+
+    private fun refuse(payment: PaymentEventPayload, reason: RejectionReason): LedgerOutcome {
+        ledgerEvents.publish(LedgerEventType.PAYMENT_FAILED, payment.transactionId, reason)
+        return LedgerOutcome.Rejected(reason)
+    }
+
+    private fun reasonToRefuse(
+        payment: PaymentEventPayload,
+        accounts: PaymentAccounts.Found,
+    ): RejectionReason? {
+        if (accounts.debited.currency != payment.currency ||
+            accounts.credited.currency != payment.currency
+        ) {
+            return RejectionReason.CURRENCY_MISMATCH
+        }
+
+        if (accounts.debited.id == accounts.credited.id) {
+            return RejectionReason.SELF_TRANSFER
+        }
+
+        // Only a wallet ever loses money on a debit, so this is the payer.
+        if (wouldGoNegative(accounts.debited, EntryDirection.DEBIT, payment.amount)) {
+            return RejectionReason.INSUFFICIENT_FUNDS
+        }
+
+        // Only the platform's cash ever loses money on a credit, so this is the float
+        // running dry on a withdrawal. It should be impossible - what the platform
+        // holds equals what it owes, so if the wallet covers it the float does too.
+        // It is here so that an impossible case fails cleanly instead of blowing up
+        // on the database's "balance can never be negative" rule.
+        if (wouldGoNegative(accounts.credited, EntryDirection.CREDIT, payment.amount)) {
+            return RejectionReason.FUNDING_ACCOUNT_SHORT
+        }
+
+        return null
+    }
+
+    private fun wouldGoNegative(
+        account: Account,
+        direction: EntryDirection,
+        amount: BigDecimal,
+    ): Boolean =
+        direction != account.accountClass.normalBalance && !account.canCover(amount)
+
+    private fun recordEntries(payment: PaymentEventPayload, accounts: PaymentAccounts.Found) {
+        entries.saveAll(
+            listOf(
+                LedgerEntry(
+                    transactionId = payment.transactionId,
+                    accountId = accounts.debited.id,
+                    direction = EntryDirection.DEBIT,
+                    amount = payment.amount,
+                    currency = payment.currency,
+                ),
+                LedgerEntry(
+                    transactionId = payment.transactionId,
+                    accountId = accounts.credited.id,
+                    direction = EntryDirection.CREDIT,
+                    amount = payment.amount,
+                    currency = payment.currency,
+                ),
+            )
+        )
+
+        accounts.debited.applyEntry(EntryDirection.DEBIT, payment.amount)
+        accounts.credited.applyEntry(EntryDirection.CREDIT, payment.amount)
+    }
+
+    private fun markEventProcessed(envelope: PaymentEventEnvelope) {
+        processedEvents.record(envelope.eventId, envelope.transactionId)
     }
 }
