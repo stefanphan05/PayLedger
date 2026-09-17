@@ -45,6 +45,7 @@ Four separate stores. Nothing reaches across them: there are no foreign keys bet
 | `status`                    | VARCHAR(20)   | `PENDING`, `UNDER_REVIEW`, `COMPLETED`, `FAILED`                                              |
 | `type`                      | VARCHAR(20)   | `TRANSFER`, `DEPOSIT`, `WITHDRAWAL`                                                           |
 | `failure_reason`            | VARCHAR(50)   | null unless the ledger refused it                                                             |
+| `failure_detail`            | VARCHAR(255)  | the sentence that goes with it, set and cleared together with the reason                      |
 | `sender_id`, `recipient_id` | UUID          | to `users`, `ON DELETE RESTRICT`. Nullable — see below                                        |
 | `version`                   | BIGINT        | optimistic locking ([ADR-0001](decisions/0001-optimistic-locking-for-transaction-updates.md)) |
 | `created_at`                | TIMESTAMPTZ   |                                                                                               |
@@ -225,6 +226,7 @@ Both Kotlin services use Flyway, and `ddl-auto` is `none`, nothing is ever creat
 | `V8__add_failure_reason` | the column holding why the ledger refused |
 | `V9__add_correlation_id_to_outbox` | back-filled from `transaction_id`, then made `NOT NULL` |
 | `V10__add_transaction_type` | the `type` column, made both parties nullable, and swapped the self-transfer check for the parties-match-type one |
+| `V11__add_failure_detail` | the sentence shown beside the reason |
 
 **fraud-db**
 
