@@ -168,6 +168,51 @@ class LedgerServiceIntegrationTests @Autowired constructor(
         assertBalance("0.00", stranger)
     }
 
+    @Test
+    fun `a deposit into a wallet holding another currency says which currency it holds`() {
+        val event = paymentInitiated(
+            BigDecimal("15.00"),
+            senderId = null,
+            currency = "USD",
+            type = PaymentEventPayload.DEPOSIT
+        )
+
+        val outcome = ledgerService.apply(event)
+
+        assertEquals(
+            LedgerOutcome.Rejected(
+                RejectionReason.ACCOUNT_CURRENCY_MISMATCH,
+                "This account holds AUD, the deposit was in USD.",
+            ),
+            outcome,
+        )
+
+        assertEquals(0L, entries.count())
+        assertBalance("0.00", recipient.id)
+
+        val verdict = outboxEvents.findAll().single()
+        assertTrue(
+            verdict.payload.contains("This account holds AUD, the deposit was in USD."),
+            "was ${verdict.payload}",
+        )
+    }
+
+    @Test
+    fun `a transfer in the wrong currency is still a plain currency mismatch`() {
+        val event = paymentInitiated(BigDecimal("10.00"), currency = "USD")
+
+        val outcome = ledgerService.apply(event)
+
+        assertEquals(
+            LedgerOutcome.Rejected(
+                RejectionReason.CURRENCY_MISMATCH,
+                "This account holds AUD, the transfer was in USD.",
+            ),
+            outcome,
+        )
+        assertEquals(0L, entries.count())
+    }
+
     private fun wallet(balance: String) = Account(
         id = UUID.randomUUID(),
         accountClass = AccountClass.LIABILITY,
@@ -177,8 +222,10 @@ class LedgerServiceIntegrationTests @Autowired constructor(
 
     private fun paymentInitiated(
         amount: BigDecimal,
-        senderId: UUID = sender.id,
-        recipientId: UUID = recipient.id,
+        senderId: UUID? = sender.id,
+        recipientId: UUID? = recipient.id,
+        currency: String = "AUD",
+        type: String = PaymentEventPayload.TRANSFER
     ): PaymentEventEnvelope {
         val transactionId = UUID.randomUUID()
         return PaymentEventEnvelope(
@@ -189,7 +236,8 @@ class LedgerServiceIntegrationTests @Autowired constructor(
             payload = PaymentEventPayload(
                 transactionId = transactionId,
                 amount = amount,
-                currency = "AUD",
+                currency = currency,
+                type = type,
                 senderId = senderId,
                 recipientId = recipientId,
             ),
