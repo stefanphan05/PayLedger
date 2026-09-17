@@ -7,7 +7,8 @@ import java.util.UUID
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class LedgerEventPayload(
     val transactionId: UUID,
-    val reason: String?
+    val reason: String?,
+    val detail: String? = null,
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

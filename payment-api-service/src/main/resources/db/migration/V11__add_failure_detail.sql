@@ -1,0 +1,1 @@
+ALTER TABLE transactions ADD COLUMN failure_detail VARCHAR(255);

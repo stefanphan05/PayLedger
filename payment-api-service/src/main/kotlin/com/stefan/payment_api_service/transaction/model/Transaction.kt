@@ -49,5 +49,8 @@ class Transaction (
     var version: Long = 0,
 
     @Column(name = "failure_reason", length = 50)
-    var failureReason: String? = null
+    var failureReason: String? = null,
+
+    @Column(name = "failure_detail", length = 255)
+    var failureDetail: String? = null,
 )
