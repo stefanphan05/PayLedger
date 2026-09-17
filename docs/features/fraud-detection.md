@@ -15,6 +15,18 @@ It decides using five plain rules:
 Each rule that fires adds a number. The numbers are added up, and the total decides the outcome.
 
 No model, no training, no learning. When a payment is held you can say exactly which rules fired and what the numbers were.
+
+**Deposits are not screened.** A deposit has no sender — the money came from outside
+— and every rule below asks what one sender has been doing recently, so there is
+nobody to ask about. Treating every deposit in the system as the same absent sender
+would trip the speed and spread rules for everyone. There is also nothing to catch:
+these rules look for an account being emptied, and a deposit is the opposite. So a
+deposit is waved straight through to the ledger and no decision is recorded for it.
+
+**Withdrawals are screened.** That is money actually leaving, so it is the flow
+these rules matter most on. Two of the five cannot fire on one: `NEW_RECIPIENT_LARGE`
+and `FAN_OUT` both ask about the recipient, and a withdrawal has none. The other
+three — speed, size, and size against this sender's own average — work as usual.
 ![](../../assets/fraud-gate-overview.png)
 `fraud-service` sits in the middle of the pipeline rather than off to one side. `payment-api-service` does not call it and does not know it exists — it publishes a payment exactly as it always did. What changed is that `ledger-service` now waits for a payment that has been *cleared*, instead of one that has merely been *asked for*.
 

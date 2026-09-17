@@ -30,11 +30,15 @@ class Transaction (
     @Column(name = "status", nullable = false, length = 20)
     var transactionStatus: TransactionStatus = TransactionStatus.PENDING,
 
-    @Column(name = "sender_id", nullable = false, updatable = false)
-    val senderId: UUID,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, length = 20, updatable = false)
+    val type: TransactionType = TransactionType.TRANSFER,
 
-    @Column(name = "recipient_id", nullable = false, updatable = false)
-    val recipientId: UUID,
+    @Column(name = "sender_id", updatable = false)
+    val senderId: UUID?,
+
+    @Column(name = "recipient_id", updatable = false)
+    val recipientId: UUID?,
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -45,5 +49,8 @@ class Transaction (
     var version: Long = 0,
 
     @Column(name = "failure_reason", length = 50)
-    var failureReason: String? = null
+    var failureReason: String? = null,
+
+    @Column(name = "failure_detail", length = 255)
+    var failureDetail: String? = null,
 )

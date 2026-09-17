@@ -16,6 +16,11 @@ class NewRecipientLargeRule (
     override fun evaluate(candidate: ScreenCandidate, history: SenderHistory): TriggeredRule? {
         val rule = properties.rules.newRecipientLarge
 
+        // A withdrawal has no recipient, so "never paid them before" means nothing.
+        if (candidate.recipientId == null) {
+            return null
+        }
+
         if (history.priorToRecipient > 0) {
             return null
         }

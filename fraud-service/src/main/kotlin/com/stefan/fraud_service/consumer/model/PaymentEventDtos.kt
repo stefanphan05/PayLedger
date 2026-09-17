@@ -14,10 +14,18 @@ data class PaymentEventPayload(
     val amount: BigDecimal,
 
     val currency: String,
-    val senderId: UUID,
-    val recipientId: UUID,
+
+    val type: String = TRANSFER,
+
+    val senderId: UUID?,
+    val recipientId: UUID?,
     val createdAt: Instant? = null,
-)
+) {
+    companion object {
+        const val TRANSFER = "TRANSFER"
+        const val DEPOSIT = "DEPOSIT"
+    }
+}
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PaymentEventEnvelope(

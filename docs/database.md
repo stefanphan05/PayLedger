@@ -37,18 +37,38 @@ Four separate stores. Nothing reaches across them: there are no foreign keys bet
 ---
 **transactions**
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID | primary key |
-| `amount` | NUMERIC(19,4) | never a float |
-| `currency` | VARCHAR(3) | |
-| `status` | VARCHAR(20) | `PENDING`, `COMPLETED`, `FAILED` |
-| `failure_reason` | VARCHAR(50) | null unless the ledger refused it |
-| `sender_id`, `recipient_id` | UUID | to `users`, `ON DELETE RESTRICT` |
-| `version` | BIGINT | optimistic locking ([ADR-0001](decisions/0001-optimistic-locking-for-transaction-updates.md)) |
-| `created_at` | TIMESTAMPTZ | |
+| Column                      | Type          | Notes                                                                                         |
+| --------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `id`                        | UUID          | primary key                                                                                   |
+| `amount`                    | NUMERIC(19,4) | never a float                                                                                 |
+| `currency`                  | VARCHAR(3)    |                                                                                               |
+| `status`                    | VARCHAR(20)   | `PENDING`, `UNDER_REVIEW`, `COMPLETED`, `FAILED`                                              |
+| `type`                      | VARCHAR(20)   | `TRANSFER`, `DEPOSIT`, `WITHDRAWAL`                                                           |
+| `failure_reason`            | VARCHAR(50)   | null unless the ledger refused it                                                             |
+| `failure_detail`            | VARCHAR(255)  | the sentence that goes with it, set and cleared together with the reason                      |
+| `sender_id`, `recipient_id` | UUID          | to `users`, `ON DELETE RESTRICT`. Nullable — see below                                        |
+| `version`                   | BIGINT        | optimistic locking ([ADR-0001](decisions/0001-optimistic-locking-for-transaction-updates.md)) |
+| `created_at`                | TIMESTAMPTZ   |                                                                                               |
 
-Three things are enforced here rather than in code: a payment cannot be to yourself (`CHECK sender_id <> recipient_id`), a user with payments cannot be deleted (`RESTRICT`), and two settlements of the same row cannot interleave (`version`).
+Three things are enforced here rather than in code: a user with payments cannot be
+deleted (`RESTRICT`), two settlements of the same row cannot interleave (`version`),
+and the parties have to match the type.
+
+That last one is a single check doing three jobs. A transfer needs both parties and
+they must be different people; a deposit has no sender; a withdrawal has no
+recipient. The empty side is the platform's own account, which lives in `ledger-db`
+and has no row in `users` to point at:
+
+```sql
+CHECK (
+       (type = 'TRANSFER'   AND sender_id IS NOT NULL AND recipient_id IS NOT NULL AND sender_id <> recipient_id)
+    OR (type = 'DEPOSIT'    AND sender_id IS NULL     AND recipient_id IS NOT NULL)
+    OR (type = 'WITHDRAWAL' AND sender_id IS NOT NULL AND recipient_id IS NULL)
+)
+```
+
+Without it, nothing would stop a deposit that also named a sender, and the ledger
+would have two different answers for where the money came from.
 
 ---
 **outbox_events**
@@ -95,7 +115,10 @@ There is no `users` table here. Account ids are minted by payment-api-service, a
 
 `CHECK (balance >= 0)` is the last line of defence. The service checks funds before writing
 
-Two funding accounts are seeded with fixed ids — `…0001` for AUD and `…0002` for USD, so the funding side of a deposit can be found without a lookup.
+Two funding accounts are seeded with fixed ids — `…0001` for AUD and `…0002` for USD.
+These are the platform's own cash, and they are the other side of every deposit and
+withdrawal. The ledger finds the right one by class and currency, and refuses the
+payment if there is none, rather than inventing an account.
 
 **ledger_entries**
 
@@ -123,7 +146,8 @@ The screener's own database. Nothing else reads it, and it holds no money, only 
 | Column | Type | Notes |
 |---|---|---|
 | `transaction_id` | UUID | primary key |
-| `sender_id`, `recipient_id` | UUID | |
+| `sender_id` | UUID | |
+| `recipient_id` | UUID | null on a withdrawal, which has no recipient |
 | `amount` | NUMERIC(19,4) | |
 | `currency` | CHAR(3) | |
 | `screened_at` | TIMESTAMPTZ | |
@@ -201,12 +225,15 @@ Both Kotlin services use Flyway, and `ddl-auto` is `none`, nothing is ever creat
 | `V7__add_processed_events` | `processed_events` |
 | `V8__add_failure_reason` | the column holding why the ledger refused |
 | `V9__add_correlation_id_to_outbox` | back-filled from `transaction_id`, then made `NOT NULL` |
+| `V10__add_transaction_type` | the `type` column, made both parties nullable, and swapped the self-transfer check for the parties-match-type one |
+| `V11__add_failure_detail` | the sentence shown beside the reason |
 
 **fraud-db**
 
 | | What it did |
 |---|---|
 | `V1__init` | `payment_attempts`, `processed_events`, `outbox_events` and their indexes |
+| `V2__allow_null_recipient` | dropped `NOT NULL` on `recipient_id`, for withdrawals |
 
 **ledger-db**
 

@@ -4,6 +4,8 @@ PayLedger is a miniature payment system designed like real-world fintech platfor
 ### payment-api-service
 `payment-api-service` is the public API. When a user clicks "Pay $15", this service catches the request, makes sure a double-click doesn't create two charges and immediately hands back a receipt marked "PENDING". It doesn't move any actual money itself, it simply logs the intent in its database and drops a message into the pipeline saying a new payment needs processing.
 
+It handles money coming in and going out the same way. An operator can put money into someone's account, and a user can take their own money out; both travel the same path as a payment between two people, and both end up in the same list.
+
 ### ledger-service
 `ledger-service` acts as the private back-office accountant that never talks to the outside internet. It picks up that message, checks if the sender actually has enough funds, moves the balance using proper double-entry bookkeeping by taking that $15 from one account and adding $15 to the other. Once the money is safely moved, it sends a note back so the front door can officially flip the transaction status from "PENDING" to "COMPLETED".
 

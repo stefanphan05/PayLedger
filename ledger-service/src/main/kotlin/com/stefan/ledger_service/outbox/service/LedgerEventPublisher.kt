@@ -1,6 +1,6 @@
 package com.stefan.ledger_service.outbox.service
 
-import com.stefan.ledger_service.ledger.model.RejectionReason
+import com.stefan.ledger_service.ledger.model.Refusal
 import com.stefan.ledger_service.outbox.model.LedgerEventEnvelope
 import com.stefan.ledger_service.outbox.model.LedgerEventType
 import com.stefan.ledger_service.outbox.model.OutboxEvent
@@ -18,9 +18,9 @@ class LedgerEventPublisher(
     fun publish(
         eventType: LedgerEventType,
         transactionId: UUID,
-        reason: RejectionReason? = null,
+        refusal: Refusal? = null,
     ) {
-        val envelope = LedgerEventEnvelope.of(eventType, transactionId, reason)
+        val envelope = LedgerEventEnvelope.of(eventType, transactionId, refusal)
 
         repository.save(
             OutboxEvent(

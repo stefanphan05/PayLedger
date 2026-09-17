@@ -9,7 +9,7 @@ import java.util.UUID
 data class ScreenCandidate(
     val transactionId: UUID,
     val senderId: UUID,
-    val recipientId: UUID,
+    val recipientId: UUID?,
     val amount: BigDecimal,
     val currency: String,
     val screenedAt: Instant,
@@ -17,7 +17,7 @@ data class ScreenCandidate(
     companion object {
         fun of(payload: PaymentEventPayload, screenedAt: Instant) = ScreenCandidate(
             transactionId = payload.transactionId,
-            senderId = payload.senderId,
+            senderId = requireNotNull(payload.senderId) { "a screened payment always has a sender" },
             recipientId = payload.recipientId,
             amount = payload.amount,
             currency = payload.currency,

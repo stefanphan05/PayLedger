@@ -19,11 +19,19 @@ data class PaymentEventPayload (
     // Arrives as the JSON string "1000.25" not a number. The producer serializes
     // it that way on purpose: money read into a double is how cents go missing
     val amount: BigDecimal,
-
     val currency: String,
-    val senderId: UUID,
-    val recipientId: UUID
-)
+
+    val type: String = TRANSFER,
+
+    val senderId: UUID? = null,
+    val recipientId: UUID? = null,
+) {
+    companion object {
+        const val TRANSFER = "TRANSFER"
+        const val DEPOSIT = "DEPOSIT"
+        const val WITHDRAWAL = "WITHDRAWAL"
+    }
+}
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PaymentEventEnvelope(
