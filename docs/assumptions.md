@@ -5,6 +5,7 @@ What this project simplifies on purpose, so "what are the limits of your system?
 * Balances are stored on `accounts`, not summed from `ledger_entries`. Faster to read, but the two can drift if a bug writes one without the other.
 * Every transaction is exactly two entries. Real ledgers allow any number that sum to zero (a fee makes three).
 * Accounts are created lazily at zero balance the first time an event names them. The ledger has no user list, so an unknown id means "not seen yet", not "invalid".
+* An account holds one currency, fixed when it is created and never changed. Whichever payment first names an account decides it, so a wallet opened by an AUD payment refuses a USD one forever (`ACCOUNT_CURRENCY_MISMATCH`). A user who needs both needs two accounts, which the system has no way to give them.
 * No overdrafts. Every balance is checked before applying, and the database blocks negatives.
 * No FX. Sender currency, recipient currency and payment currency must all match. Revisit in the future when we want to support FX
 * `NUMERIC(19,4)` assumes every currency has 4 decimal places. JPY has 0.

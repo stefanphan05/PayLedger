@@ -5,6 +5,7 @@
   "transactionId": "@transactionId@",
   "payload": {
     "transactionId": "@transactionId@",
-    "reason": "@reason@"
+    "reason": "@reason@",
+    "detail": "@detail@"
   }
 }

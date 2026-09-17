@@ -1,5 +1,6 @@
 package com.stefan.ledger_service.outbox.model
 
+import com.stefan.ledger_service.ledger.model.Refusal
 import com.stefan.ledger_service.ledger.model.RejectionReason
 import java.time.Instant
 import java.util.UUID
@@ -10,7 +11,8 @@ import java.util.UUID
  */
 data class LedgerEventPayload(
     val transactionId: UUID,
-    val reason: RejectionReason?
+    val reason: RejectionReason?,
+    val detail: String? = null,
 )
 
 data class LedgerEventEnvelope(
@@ -24,13 +26,17 @@ data class LedgerEventEnvelope(
         fun of(
             eventType: LedgerEventType,
             transactionId: UUID,
-            reason: RejectionReason? = null,
+            refusal: Refusal? = null,
         ) = LedgerEventEnvelope(
             eventId = UUID.randomUUID(),
             eventType = eventType,
             occurredAt = Instant.now(),
             transactionId = transactionId,
-            payload = LedgerEventPayload(transactionId, reason)
+            payload = LedgerEventPayload(
+                transactionId,
+                refusal?.reason,
+                refusal?.detail
+            )
         )
     }
 }

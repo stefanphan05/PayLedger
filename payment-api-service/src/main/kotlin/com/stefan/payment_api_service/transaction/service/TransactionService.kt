@@ -111,6 +111,7 @@ class TransactionService(
         // Only the ledger's verdict sets a reason. A manual override has none to give, so
         // leaving the old one attached would explain a status that no longer exists.
         transaction.failureReason = null
+        transaction.failureDetail = null
 
         val savedTransaction = repository.save(transaction)
         paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
@@ -134,6 +135,8 @@ class TransactionService(
             transaction.transactionStatus = status
 
             transaction.failureReason = event.payload.reason
+            transaction.failureDetail = event.payload.detail
+
             val savedTransaction = repository.save(transaction)
             paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)
 
@@ -163,7 +166,9 @@ class TransactionService(
             }
 
             transaction.transactionStatus = verdict.newStatus
+
             transaction.failureReason = verdict.failureReason
+            transaction.failureDetail = verdict.failureDetail
 
             val savedTransaction = repository.save(transaction)
             paymentEventPublisher.publish(PaymentEventType.PAYMENT_STATUS_CHANGED, savedTransaction)

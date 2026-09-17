@@ -6,6 +6,7 @@ enum class FraudVerdict(
     val appliesTo: Set<TransactionStatus>,
     val newStatus: TransactionStatus,
     val failureReason: String? = null,
+    val failureDetail: String? = null,
 ) {
     CLEARED(
         appliesTo = setOf(TransactionStatus.UNDER_REVIEW),
@@ -21,6 +22,7 @@ enum class FraudVerdict(
         appliesTo = setOf(TransactionStatus.PENDING, TransactionStatus.UNDER_REVIEW),
         newStatus = TransactionStatus.FAILED,
         failureReason = "FRAUD_BLOCKED",
+        failureDetail = "This payment was stopped by fraud screening.",
     );
 
     companion object {

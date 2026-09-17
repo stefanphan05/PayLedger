@@ -76,7 +76,7 @@ This is not a rare edge case. A rolled-back outbox batch resends every record th
 
 ## The ledger refuses a payment
 
-Not a failure of the system, a decision by it. `CURRENCY_MISMATCH`, `SELF_TRANSFER` or `INSUFFICIENT_FUNDS` produce a `PAYMENT_FAILED` event exactly like a success produces `PAYMENT_COMPLETED`, the transaction moves to `FAILED`, and `failure_reason` records why.
+Not a failure of the system, a decision by it. `CURRENCY_MISMATCH`, `SELF_TRANSFER` or `INSUFFICIENT_FUNDS` produce a `PAYMENT_FAILED` event exactly like a success produces `PAYMENT_COMPLETED`, the transaction moves to `FAILED`, and `failure_reason` records why — with `failure_detail` recording it in words ([ADR-0024](decisions/0024-say-why-a-payment-was-refused-in-a-sentence.md)).
 
 The important part is that a refusal still publishes. Silence would leave the payment `PENDING`forever.
 
