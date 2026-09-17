@@ -48,7 +48,7 @@ class PaymentEventListener(
                     countOutcome("completed", "none")
                 }
                 is LedgerOutcome.Rejected -> {
-                    logger.warn("Rejected transaction {}: {}", event.transactionId, outcome.reason)
+                    logger.warn("Rejected transaction {}: {} - {}", event.transactionId, outcome.reason, outcome.detail)
                     countOutcome("rejected", outcome.reason.name)
                 }
             }
