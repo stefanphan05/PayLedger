@@ -66,3 +66,16 @@ kotlin {
 tasks.withType<Test> {
 	useJUnitPlatform()
 }
+
+tasks.test {
+	finalizedBy(tasks.jacocoTestReport)   // report after every test run
+}
+
+tasks.jacocoTestReport {
+	dependsOn(tasks.test)
+	reports {
+		html.required = true
+		xml.required = true    // machine-readable, handy for grepping a number
+		csv.required = true
+	}
+}
