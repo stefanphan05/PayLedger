@@ -2,6 +2,7 @@ package com.stefan.ledger_service.ledger.model
 
 enum class RejectionReason(val message: String) {
     CURRENCY_MISMATCH("Sender and recipient must use the same currency."),
+    ACCOUNT_CURRENCY_MISMATCH("This account holds a different currency"),
     SELF_TRANSFER("Cannot transfer to the same account."),
     INSUFFICIENT_FUNDS("Insufficient funds."),
     NO_FUNDING_ACCOUNT("No funding account exists for this currency."),

@@ -6,6 +6,7 @@ import com.stefan.ledger_service.ledger.model.Account
 import com.stefan.ledger_service.ledger.model.AccountClass
 import com.stefan.ledger_service.ledger.model.EntryDirection
 import com.stefan.ledger_service.ledger.model.LedgerEntry
+import com.stefan.ledger_service.ledger.model.Refusal
 import com.stefan.ledger_service.ledger.model.RejectionReason
 import com.stefan.ledger_service.ledger.repository.AccountRepository
 import com.stefan.ledger_service.ledger.repository.LedgerEntryRepository
@@ -38,7 +39,7 @@ class LedgerService(
         val payment = envelope.payload
 
         return when (val accounts = accountsFor(payment)) {
-            is PaymentAccounts.CouldNotFind -> refuse(payment, accounts.reason)
+            is PaymentAccounts.CouldNotFind -> refuse(payment, accounts.refusal)
             is PaymentAccounts.Found -> post(payment, accounts)
         }
     }
@@ -46,7 +47,7 @@ class LedgerService(
     // ---------------------------------------------------------------- accounts
     private sealed interface PaymentAccounts {
         data class Found(val debited: Account, val credited: Account) : PaymentAccounts
-        data class CouldNotFind(val reason: RejectionReason) : PaymentAccounts
+        data class CouldNotFind(val refusal: Refusal) : PaymentAccounts
     }
 
     private fun accountsFor(payment: PaymentEventPayload): PaymentAccounts = when (payment.type) {
@@ -58,9 +59,9 @@ class LedgerService(
     /** One user pays another. Money leaves one wallet and lands in the other. */
     private fun transferAccounts(payment: PaymentEventPayload): PaymentAccounts {
         val sender = payment.senderId
-            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
+            ?: return PaymentAccounts.CouldNotFind(Refusal(RejectionReason.MALFORMED_PAYMENT))
         val recipient = payment.recipientId
-            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
+            ?: return PaymentAccounts.CouldNotFind(Refusal(RejectionReason.MALFORMED_PAYMENT))
 
         return PaymentAccounts.Found(
             debited = walletFor(sender, payment.currency),
@@ -74,9 +75,9 @@ class LedgerService(
      */
     private fun depositAccounts(payment: PaymentEventPayload): PaymentAccounts {
         val platformCash = fundingAccountFor(payment.currency)
-            ?: return PaymentAccounts.CouldNotFind(RejectionReason.NO_FUNDING_ACCOUNT)
+            ?: return PaymentAccounts.CouldNotFind(Refusal(RejectionReason.NO_FUNDING_ACCOUNT))
         val user = payment.recipientId
-            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
+            ?: return PaymentAccounts.CouldNotFind(Refusal(RejectionReason.MALFORMED_PAYMENT))
 
         return PaymentAccounts.Found(
             debited = platformCash,
@@ -87,9 +88,9 @@ class LedgerService(
     /** Money leaving. The mirror of a deposit: both sides go down. */
     private fun withdrawalAccounts(payment: PaymentEventPayload): PaymentAccounts {
         val platformCash = fundingAccountFor(payment.currency)
-            ?: return PaymentAccounts.CouldNotFind(RejectionReason.NO_FUNDING_ACCOUNT)
+            ?: return PaymentAccounts.CouldNotFind(Refusal(RejectionReason.NO_FUNDING_ACCOUNT))
         val user = payment.senderId
-            ?: return PaymentAccounts.CouldNotFind(RejectionReason.MALFORMED_PAYMENT)
+            ?: return PaymentAccounts.CouldNotFind(Refusal(RejectionReason.MALFORMED_PAYMENT))
 
         return PaymentAccounts.Found(
             debited = walletFor(user, payment.currency),
@@ -124,36 +125,32 @@ class LedgerService(
     // ------------------------------------------------------------- the posting
 
     private fun post(payment: PaymentEventPayload, accounts: PaymentAccounts.Found): LedgerOutcome {
-        val reason = reasonToRefuse(payment, accounts)
-        if (reason != null) return refuse(payment, reason)
+        val refusal = refusalFor(payment, accounts)
+        if (refusal != null) return refuse(payment, refusal)
 
         recordEntries(payment, accounts)
         ledgerEvents.publish(LedgerEventType.PAYMENT_COMPLETED, payment.transactionId)
         return LedgerOutcome.Applied
     }
 
-    private fun refuse(payment: PaymentEventPayload, reason: RejectionReason): LedgerOutcome {
-        ledgerEvents.publish(LedgerEventType.PAYMENT_FAILED, payment.transactionId, reason)
-        return LedgerOutcome.Rejected(reason)
+    private fun refuse(payment: PaymentEventPayload, refusal: Refusal): LedgerOutcome {
+        ledgerEvents.publish(LedgerEventType.PAYMENT_FAILED, payment.transactionId, refusal)
+        return LedgerOutcome.Rejected(refusal)
     }
 
-    private fun reasonToRefuse(
+    private fun refusalFor(
         payment: PaymentEventPayload,
         accounts: PaymentAccounts.Found,
-    ): RejectionReason? {
-        if (accounts.debited.currency != payment.currency ||
-            accounts.credited.currency != payment.currency
-        ) {
-            return RejectionReason.CURRENCY_MISMATCH
-        }
+    ): Refusal? {
+        wrongCurrency(payment, accounts)?.let { return it }
 
         if (accounts.debited.id == accounts.credited.id) {
-            return RejectionReason.SELF_TRANSFER
+            return Refusal(RejectionReason.SELF_TRANSFER)
         }
 
         // Only a wallet ever loses money on a debit, so this is the payer.
         if (wouldGoNegative(accounts.debited, EntryDirection.DEBIT, payment.amount)) {
-            return RejectionReason.INSUFFICIENT_FUNDS
+            return Refusal(RejectionReason.INSUFFICIENT_FUNDS)
         }
 
         // Only the platform's cash ever loses money on a credit, so this is the float
@@ -162,10 +159,35 @@ class LedgerService(
         // It is here so that an impossible case fails cleanly instead of blowing up
         // on the database's "balance can never be negative" rule.
         if (wouldGoNegative(accounts.credited, EntryDirection.CREDIT, payment.amount)) {
-            return RejectionReason.FUNDING_ACCOUNT_SHORT
+            return Refusal(RejectionReason.FUNDING_ACCOUNT_SHORT)
         }
 
         return null
+    }
+
+    private fun wrongCurrency(
+        payment: PaymentEventPayload,
+        accounts: PaymentAccounts.Found,
+    ): Refusal? {
+        val account = listOf(accounts.debited, accounts.credited)
+            .firstOrNull { it.currency != payment.currency }
+            ?: return null
+
+        val movement = when (payment.type) {
+            PaymentEventPayload.DEPOSIT -> "deposit"
+            PaymentEventPayload.WITHDRAWAL -> "withdrawal"
+            else -> "transfer"
+        }
+
+        val reason = when (payment.type) {
+            PaymentEventPayload.WITHDRAWAL, PaymentEventPayload.DEPOSIT -> RejectionReason.ACCOUNT_CURRENCY_MISMATCH
+            else -> RejectionReason.CURRENCY_MISMATCH
+        }
+
+        return Refusal(
+            reason,
+            "This account holds ${account.currency}, the $movement was in ${payment.currency}."
+        )
     }
 
     private fun wouldGoNegative(
