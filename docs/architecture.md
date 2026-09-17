@@ -92,7 +92,7 @@ sequenceDiagram
         Note over Ledger: 5. Never receives it. No money moves<br/>until a person releases it
     else score 70 or more - BLOCK
         Kafka->>PayAPI: Consume fraud-events: PAYMENT_BLOCKED
-        PayAPI->>PayDB: UPDATE status FAILED,<br/>failure_reason FRAUD_BLOCKED
+        PayAPI->>PayDB: UPDATE status FAILED,<br/>failure_reason + failure_detail
     end
 ```
 
@@ -159,13 +159,17 @@ between two wallets. A deposit and a withdrawal have the platform's own cash acc
 on one side, which the ledger finds by currency — the sender who asked never names
 it ([ADR-0023](decisions/0023-one-transactions-table-for-money-in-and-out.md)).
 
-Five things reject a payment ([ADR-0009](decisions/0009-store-the-rejection-reason-as-opaque-text.md)):
+Six things reject a payment ([ADR-0009](decisions/0009-store-the-rejection-reason-as-opaque-text.md)):
 
-- `CURRENCY_MISMATCH`
+- `CURRENCY_MISMATCH` — a transfer whose two wallets do not agree
+- `ACCOUNT_CURRENCY_MISMATCH` — a deposit or withdrawal in a currency that account does not hold
 - `SELF_TRANSFER`
 - `INSUFFICIENT_FUNDS`
 - `NO_FUNDING_ACCOUNT` — a deposit or withdrawal in a currency the platform holds no cash in
 - `FUNDING_ACCOUNT_SHORT` — the float cannot cover a withdrawal, which should never happen
+
+Each one carries a sentence as well as a code, because a code alone cannot say which
+currency an account holds ([ADR-0024](decisions/0024-say-why-a-payment-was-refused-in-a-sentence.md)).
 
 All of them still publish an event, a refusal is an answer, and the `payment-api-service` is holding a `PENDING` row waiting for one.
 
