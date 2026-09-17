@@ -206,7 +206,8 @@ curl -X POST http://localhost:8080/transactions \
   "senderId": "3f1b7a2e-...",
   "recipientId": "9c2d5b10-...",
   "createdAt": "2026-09-08T10:22:04Z",
-  "failureReason": null
+  "failureReason": null,
+  "failureDetail": null
 }
 ```
 
@@ -217,9 +218,17 @@ side is the platform, not a user. Parse both as nullable.
 `amount` is serialised as a **JSON string** to avoid float rounding; parse it with a
 decimal type, not a double.
 
-`failureReason` is `null` unless `status` is `FAILED`, and is free text — treat it as a message to show, not a code to branch on. Today `ledger-service` sends
-`INSUFFICIENT_FUNDS`, `CURRENCY_MISMATCH`, `SELF_TRANSFER`, `NO_FUNDING_ACCOUNT` or
+`failureReason` and `failureDetail` are both `null` unless `status` is `FAILED`, and
+they always arrive together. The reason is a short code, the detail is a sentence
+written for a person — **show the detail, and branch on neither**. Today
+`ledger-service` sends `INSUFFICIENT_FUNDS`, `CURRENCY_MISMATCH`,
+`ACCOUNT_CURRENCY_MISMATCH`, `SELF_TRANSFER`, `NO_FUNDING_ACCOUNT` or
 `FUNDING_ACCOUNT_SHORT`, and may add more. Fraud screening sends `FRAUD_BLOCKED`.
+
+The detail is where anything a code cannot carry gets spelled out, such as
+`"This account holds AUD, the deposit was in USD."` Payments that failed before this
+field existed have a reason and no detail, so treat it as nullable even on a `FAILED`
+payment ([ADR-0024](decisions/0024-say-why-a-payment-was-refused-in-a-sentence.md)).
 
 ### Idempotency
 
@@ -352,7 +361,8 @@ curl -X POST http://localhost:8080/transactions/deposits \
   "senderId": null,
   "recipientId": "9c2d5b10-...",
   "createdAt": "2026-09-16T04:12:30Z",
-  "failureReason": null
+  "failureReason": null,
+  "failureDetail": null
 }
 ```
 
@@ -371,6 +381,13 @@ curl -X POST http://localhost:8080/transactions/deposits \
 A deposit in a currency the platform holds no cash in settles as `FAILED` with
 `failureReason: "NO_FUNDING_ACCOUNT"` — it is accepted, then refused by the ledger.
 Today that means anything other than AUD or USD.
+
+A deposit into an account that holds a different currency settles as `FAILED` with
+`ACCOUNT_CURRENCY_MISMATCH`, and the detail names both: `"This account holds AUD, the
+deposit was in USD."` An account holds one currency, fixed the first time the ledger
+saw it, so depositing another currency into it is never possible — it is not a
+temporary condition to retry
+([ADR-0024](decisions/0024-say-why-a-payment-was-refused-in-a-sentence.md)).
 
 ---
 
@@ -420,7 +437,8 @@ curl -X POST http://localhost:8080/transactions/withdrawals \
   "senderId": "3f1b7a2e-...",
   "recipientId": null,
   "createdAt": "2026-09-16T04:20:11Z",
-  "failureReason": null
+  "failureReason": null,
+  "failureDetail": null
 }
 ```
 
@@ -593,7 +611,7 @@ a user, so there is no id to hand back for it.
 | `COMPLETED` | Funds moved and the double-entry posting committed |
 | `FAILED` | Rejected by the ledger, or refused by fraud screening |
 
-`PENDING` is the only status `POST /transactions` ever returns. A payment refused by fraud screening becomes `FAILED` with `failureReason: "FRAUD_BLOCKED"`, the same shape as a ledger rejection.
+`PENDING` is the only status `POST /transactions` ever returns. A payment refused by fraud screening becomes `FAILED` with `failureReason: "FRAUD_BLOCKED"` and a detail saying so, the same shape as a ledger rejection.
 
 `UNDER_REVIEW` cannot be set by hand through `PATCH /transactions/{id}/status`; it is a screening outcome, and a payment put there by hand could never be released.
 
